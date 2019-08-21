@@ -1,8 +1,0 @@
-ObjectType = Image
-NDims = 3
-BinaryData = True
-DimSize = 751 751 576
-ElementSize = 1.000000 1.000000 1.000000
-ElementType = MET_UCHAR
-ElementByteOrderMSB = False
-ElementDataFile = 26_QS_MI_b_B_nlm.raw
