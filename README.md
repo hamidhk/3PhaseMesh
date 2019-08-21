@@ -102,7 +102,7 @@ new_verts = smoothing(verts, faces, nbrLB, method='aniso_diff')
 The amount of change of verts from their originals is by default constrained to 1.7 pixel (longest diagonal of a 1x1x1 voxel, given 1 pixel uncertainty in imaging), unless another constraint is given to the smoothing function using
 
 ```
-verts_constraint=1.4
+# verts_constraint=1.4
 new_verts = smoothing(verts, faces, nbrLB, verts_constraint=1.4 )
 ```
 
@@ -159,8 +159,14 @@ The main code is in the file curvatures_smoothing.py. All the written functions 
 
 
 ```
-#smoothing #triangular #mesh #Laplace #Beltrami #differential # geometry #cotangent #discretization #mean #Gaussian #principal #curvature #tours #double_torus #triple_torus #sphere #ball
-#manifold #visualization #neighborhood #map #vertex #vertices #edge #face #normal #vector
-#Young-Laplace #capillary #pressure #X-ray #tomography #image #fluid #flow #porous #material #Helmholtz #free #energy #state #variable
+#smoothing #triangular #mesh #Laplace #Beltrami
+#differential # geometry #cotangent #discretization
+#mean #Gaussian #principal #curvature
+#tours #double_torus #triple_torus #sphere #ball
+#manifold #visualization #neighborhood #map
+#vertex #vertices #edge #face #normal #vector
+#Young-Laplace #capillary #pressure 
+#X-ray #tomography #image #fluid #flow #porous #material
+#Helmholtz #free #energy #state #variable
 
 ```
