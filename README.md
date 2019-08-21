@@ -14,13 +14,13 @@ Further, the code can be used in general for smoothing any triangular meshes, fi
 
 ## Descriptions
 
-###1)
+### 1)
 The .raw/.mhd images used in this work can be loaded as numpy arrays
 either using simpleITK library (See main()), or simply by simpleitk plugin of skimage library after simpleitk library is installed.
 The .raw/.mhd images we use have been published by [Schlüter et al. in 2016](https://doi.org/10.1002/2016WR019815) and [2017](https://doi.org/10.1002/2015WR018254).
 In the images, pixel value of 0 is nonwetting fluid (an oil-based fluid), 1 is wetting fluid (salt water) and 2 is solid (sintered glass spheres) plus the boundary.
 
-###2)
+### 2)
 Smoothing of fluid-fluid interfaces should be done locally (minimization of Helmholtz free energy) i.e. all the interfaces in an image should be identified and extracted. Therefore, the wetting and nonwetting droplets are labeled separately using ndimage.measurements.label(img_phaseA) and ndimage.measurements.label(img_phaseB) from scipy library. Afterwards, function
 
 ```
@@ -29,7 +29,7 @@ labeledVolSetA_labeledVolSetB_neighbor_blobs(lbld_W, lbld_N)
 
 takes the two images and identifies which wetting droplet (label) is neighbor with which nonwetting droplet (label).
 
-###3)
+### 3)
 The next step is to create mesh on the wetting and nonwetting blobs where we want to extract wetting-nonwetting (WN) interface. Marching cube algorithm for laying triangulated mesh on volumes accessible in measure.marching_cubes_lewiner(wetting_blob) in skimage library used to do this task.
 
 ```
@@ -38,7 +38,7 @@ vertsN, facesN, normsN, valsN = measure.marching_cubes_lewiner(nonwetting_blob)
 ```
 verts (vertices) are (z,y,x) coordinates; faces represent triangles. Each face contains three indices of verts [v0,v1,v2]. Norms (normals) are the normal vectors of verts; and vals (values) are taken from the pixel value of the original image.
 
-###4)
+### 4)
 For the neighbor blobs, the WN interface or the common faces of the triangulated surfaces of wetting and nonwetting fluids can be extracted using the function,
 
 ```
@@ -47,7 +47,7 @@ meshA_meshB_common_surface(vertsA, facesA, vertsB, facesB)
 
 The function returns verts and faces of the common interface. The function is optimized for different sizes of the two meshes for which the common interface needs to be extracted. Different cases of large-large, small-large and small-small meshes are designed. The large-large case is parallelized using concurrent.futures.ThreadPoolExecutor() in Python. Detection of which case the function is going to execute is automatically performed via nested functions. 
 
-###5)
+### 5)
 Smoothing of WN interface requires identification of the verts that are neighbor on the mesh, because in smoothing, we eventually need to maximize the dot product of normal vectors of all neighbor verts in order to smooth the surfaces.
 Function
 
@@ -63,7 +63,7 @@ verticesLaplaceBeltramiNeighborhood(faces, numVerts)
 ```
 is nested in the parallel one, too.
 
-###6)
+### 6)
 Smoothing requires the calculation of normal vectors at faces (triangles) and verts and it also requires the normalization of vectors (length = 1). Small and effective functions for these purposes are created using numpy.
 
 ``` 
@@ -72,7 +72,7 @@ verticesUnitNormals(verts, faces) # normals of verts
 unitVector(vec)					  # normalization of vectors (length = 1)
 ```
 
-###7)
+### 7)
 The function
 
 ```
@@ -126,7 +126,7 @@ smoothing_triple_torus()       # smooths triple torus by isotropic diff.
 smoothing_double_torus('aniso_diff') # smooths double torus by anisotropic diff.
 smoothing_double_torus()        # smooths double torus by isotropic diff.
 ```
-###8)
+### 8)
 Parallel computation (multi-threading) has been used in a number of functions:
 
 ```
@@ -143,7 +143,7 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
 # only 12 tasks are created 
 with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
 ```
-###9)
+### 9)
 If the intention is estimation of contact angle of the fluid-fluid interface with the solid surface, isotropic and anisotropic methods can be implemented to smooth fluid-fluid interfaces and solid surfaces, respectively. Contact angle computation requires extraction of the three-phase contact line by functions
 
 ```
@@ -153,7 +153,7 @@ meshAB_meshC_common_line(nbrLB_AB, vertsAB, vertsC, facesC)
 The two functions are under development.
 
 
-###NOTE: 
+### NOTE: 
 The main code is in the file curvatures_smoothing.py. All the written functions (old and recent) are archived in file all_func.py.
 
 
