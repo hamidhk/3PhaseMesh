@@ -1734,7 +1734,7 @@ def main():
             print(nr_blb_N, 'isolated nonwetting blob(s)', '\n')
             # returns which wetting and nonwetting blobs are neighbors
             print('finding neighbor blobs of vol. A & vol. B, eg. wetting & nonwetting neighbor blobs:')
-            # nbr_blobs = labeledVolSetA_labeledVolSetB_neighbor_blobs(lbld_W, lbld_N)
+            nbr_blobs = labeledVolSetA_labeledVolSetB_neighbor_blobs(lbld_W, lbld_N)
 
             # ################################# testing ###################################
             # blb_W = np.where(lbld_W == 2186, lbld_W, 0) # wetting (W) blob
