@@ -162,7 +162,7 @@ The main code is in the file curvatures_smoothing.py. All the written functions 
 #smoothing #triangular #mesh #Laplace #Beltrami
 #differential # geometry #cotangent #discretization
 #mean #Gaussian #principal #curvature
-#tours #double_torus #triple_torus #sphere #ball
+#torus #double_torus #triple_torus #sphere #ball
 #manifold #visualization #neighborhood #map
 #vertex #vertices #edge #face #normal #vector
 #Young-Laplace #capillary #pressure 
