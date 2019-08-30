@@ -12,6 +12,8 @@ from time import time
 import concurrent.futures
 import pickle
 
+from numba import jit
+
 
 
 
@@ -779,6 +781,7 @@ def mesh_border_edges(faces):
         return print('Mesh has no boundary (closed surface).')
 
 
+@jit(nopython=True)
 def unitVector(vec):
     # returns array of unit vectors of a np.array with shape=(n,3)
     leng = np.sqrt(vec[:,0]**2 + vec[:,1]**2 + vec[:,2]**2)
@@ -812,6 +815,7 @@ def facesUnitNormals(verts, faces):
     return nFace
 
 
+@jit(nopython=True)
 def averageAllDotProducts(nbrLB, nV):
     # returns the sum of dot products of vectors n1 and n2
     # n1 & n2 symbolize unit normals for all pairs of neighbor verts
@@ -1368,7 +1372,7 @@ def smoothing(verts, faces, nbrLB, **kwargs):
     # neighbors' unit normals
     # smoother surface will have an average approaching unity
     VV, smooth, constr, maxa = [], [], [], []
-    smooth.append(averageAllDotProducts(nbrLB, nV)) # at original verts
+    smooth.append(np.float64(averageAllDotProducts(nbrLB, nV))) # at original verts
     constr.append(np.float64(0))
     maxa.append(max_A)
     VV.append(verts)
@@ -1412,7 +1416,7 @@ def smoothing(verts, faces, nbrLB, **kwargs):
         maxa.append(max_a)
         # sum of squared of distance difference of updated and original verts
         constr.append(sum(dd)) #constr.append(sum(np.sqrt(dd)))
-        smooth.append(averageAllDotProducts(nbrLB, nV))
+        smooth.append(np.float64(averageAllDotProducts(nbrLB, nV)))
 
         if mm % nn == 0: # true at every nn-th iter.
             # checks if iteration should be ended
@@ -1570,15 +1574,15 @@ def smoothing_ball(r, *args):
     verts, faces, norms, vals = measure.marching_cubes_lewiner(ball)
     print('\nBall with radius {} has {} verts and {} faces.'\
             .format(r, len(verts), len(faces)))
-    mlab.triangular_mesh(verts[:,0], verts[:,1], verts[:,2], faces)
-    mlab.show()
+    # mlab.triangular_mesh(verts[:,0], verts[:,1], verts[:,2], faces)
+    # mlab.show()
     nbrLB = verticesLaplaceBeltramiNeighborhood(faces, len(verts))
     if 'aniso_diff' in args:
         verts2 = smoothing(verts, faces, nbrLB, method='aniso_diff')
     else:
         verts2 = smoothing(verts, faces, nbrLB)
-    mlab.triangular_mesh(verts2[:,0], verts2[:,1], verts2[:,2], faces)
-    mlab.show()
+    # mlab.triangular_mesh(verts2[:,0], verts2[:,1], verts2[:,2], faces)
+    # mlab.show()
 
 
 def smoothing_double_torus(*args):
@@ -1737,7 +1741,7 @@ def main():
             nbr_blobs = labeledVolSetA_labeledVolSetB_neighbor_blobs(lbld_W, lbld_N)
 
             # ################################# testing ###################################
-            # blb_W = np.where(lbld_W == 2186, lbld_W, 0) # wetting (W) blob
+            # blb_W = np.where(lbld_W == 1, lbld_W, 0) # wetting (W) blob
             # blb_N = np.where(lbld_N == 1, lbld_N, 0) # nonwetting (N) blob
             # vertsW, facesW, normsW, valsW = measure.marching_cubes_lewiner(blb_W)
             # vertsN, facesN, normsN, valsN = measure.marching_cubes_lewiner(blb_N)
