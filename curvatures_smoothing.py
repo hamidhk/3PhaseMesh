@@ -1048,7 +1048,7 @@ def verticesLaplaceBeltramiNeighborhood_parallel(faces, verts):
                     zyx.append([zit, zft, yit, yft, xit, xft])
         # multi-threading on subarrays
         # and neighbors' search on individual parts
-        with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             for outp  in executor.map(sequential, zyx):
                 pass
         # assembling the results in nbrLB
@@ -1073,7 +1073,7 @@ def verticesLaplaceBeltramiNeighborhood_parallel(faces, verts):
                 high = (k+1)*d + len(nbrLB)%mm
             sub.append([low,high])
         # removing repeated results in nbrLB (multi-threading)
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             for outp  in executor.map(sequential_cleaning, sub):
                 pass
         nbrLB = nbrLB[nbrLB[:,1]!=-2]    
@@ -1096,15 +1096,20 @@ def MeanGaussianPrincipalCurvatures(verts, nV, nbrLB, *args):
     # verts inside mesh have both alpha and beta angles
     # verts on the boundaries have only alpha angle
     # a for alpha-side and b for beta-side of an edge (i-j)
-    withOutBeta = nbrLB[:,3]==-1
-    withBeta = nbrLB[:,3]!=-1
-    vr = verts[nbrLB] # vertices
+    vr0 = verts[nbrLB[:,0]] # vertices
+    vr1 = verts[nbrLB[:,1]] # vertices
+    vr2 = verts[nbrLB[:,2]] # vertices
+    vr3 = verts[nbrLB[:,3]] # vertices
     # triangle sides (edges)
-    ua = vr[:,0] - vr[:,2] # vectors for edges
-    va = vr[:,1] - vr[:,2]
-    wab = vr[:,0] - vr[:,1]
-    ub = vr[:,0] - vr[:,3]
-    vb = vr[:,1] - vr[:,3]
+    ua = vr0 - vr2 # vectors for edges
+    va = vr1 - vr2
+    del vr2
+    wab = vr0 - vr1
+    ub = vr0 - vr3
+    del vr0
+    vb = vr1 - vr3
+    del vr1, vr3
+    withOutBeta = nbrLB[:,3]==-1
     ub[withOutBeta] = 0 # setting side ub to zero when beta doesn't exist
     vb[withOutBeta] = 0 # setting side vb to zero when beta doesn't exist
 
@@ -1116,65 +1121,90 @@ def MeanGaussianPrincipalCurvatures(verts, nV, nbrLB, *args):
     vbwab = vb[:,0]*wab[:,0] + vb[:,1]*wab[:,1] + vb[:,2]*wab[:,2]
 
     l2ua = ua[:,0]**2 + ua[:,1]**2 + ua[:,2]**2 # squared of lengths
+    del ua
     l2va = va[:,0]**2 + va[:,1]**2 + va[:,2]**2
+    del va
     l2wab = wab[:,0]**2 + wab[:,1]**2 + wab[:,2]**2
     l2ub = ub[:,0]**2 + ub[:,1]**2 + ub[:,2]**2
+    del ub
     l2vb = vb[:,0]**2 + vb[:,1]**2 + vb[:,2]**2
+    del vb
 
     # 2x Triangle area on alpha and beta sides of i,j edge
     areaTa = np.sqrt(l2ua*l2va-(uava**2))
+    del l2va
     areaTb = np.sqrt(l2ub*l2vb-(ubvb**2))
+    del l2ub, l2vb
     # smoothing may sometimes squeeze all 3 verts of a face so close
     # that the area becomes zero. This causes zero-division warning
     # & potentially errors. The two lines below is to prevent this!
     areaTa[areaTa==0] = 2.2250738585072014e-308
     areaTb[areaTb==0] = 2.2250738585072014e-308
-
+    # max triangle area in the mesh
+    maxa = 0.5*max(np.max(areaTa), np.max(areaTb[areaTb>0]))
+    
     cota = uava/areaTa  # cot(alpha)
     cotb = np.zeros(shape=cota.shape, dtype=cota.dtype)
     # cot(beta), when beta exists
+    withBeta = nbrLB[:,3]!=-1
     cotb[withBeta] = ubvb[withBeta]/areaTb[withBeta]
+    del withBeta
     cotb[withOutBeta] = 0  # when beta doesn't exist (edge in boundary)
+    del withOutBeta
     
     # three dot products to see if a triangle is obtuse
     # axis0 (alpha & beta); axis1 (angle by vert i); axis2 (the other angle)
     aa = np.vstack((uava, uawab, -vawab)).T
+    del uava, vawab
     bb = np.vstack((ubvb, ubwab, -vbwab)).T
-    # True if all three are positive (all angles>=90)
-    aasgn = np.logical_and(aa[:,0]>=0, aa[:,1]>=0, aa[:,2]>=0)
-    bbsgn = np.logical_and(bb[:,0]>=0, bb[:,1]>=0, bb[:,2]>=0)
+    del ubvb, ubwab, vbwab  
     
     # Av (A_voroni) stores areas of alpha and beta sides in its axes 0, 1
     Av = np.zeros(shape=(len(nbrLB),2), dtype=verts.dtype)
-    aaAllPos = aasgn == True
-    bbAllPos = bbsgn == True
-    aa1Neg = aa[:,1]<0
-    bb1Neg = bb[:,1]<0
-    aa0Neg = aa[:,0]<0
-    bb0Neg = bb[:,0]<0
-    aa2Neg = aa[:,2]<0
-    bb2Neg = bb[:,2]<0
+    # True if all three are positive (all angles>=90)
+    aaAllPos = np.logical_and(aa[:,0]>=0, aa[:,1]>=0, aa[:,2]>=0) == True
     # voroni area where triangle in alpha-side is not obtuse
     Av[:,0][aaAllPos] = cota[aaAllPos]*l2wab[aaAllPos]/8
+    del aaAllPos
+    # True if all three are positive (all angles>=90)
+    bbAllPos = np.logical_and(bb[:,0]>=0, bb[:,1]>=0, bb[:,2]>=0) == True
     # voroni area where triangle in beta-side is not obtuse
     Av[:,1][bbAllPos] = cotb[bbAllPos]*l2wab[bbAllPos]/8
+    del bbAllPos
     # voroni area at alpha-side when triangle is obtuse at i-angle
+    aa1Neg = aa[:,1]<0
     Av[:,0][aa1Neg] = areaTa[aa1Neg]/4
+    del aa1Neg
     # voroni area at beta-side when triangle is obtuse at i-angle
+    bb1Neg = bb[:,1]<0
     Av[:,1][bb1Neg] = areaTb[bb1Neg]/4
+    del bb1Neg
     # voroni area at alpha-side when triangle is obtuse but not in i-angle
+    aa0Neg = aa[:,0]<0
     Av[:,0][aa0Neg] = areaTa[aa0Neg]/8
+    del aa0Neg
+    aa2Neg = aa[:,2]<0
+    del aa
     Av[:,0][aa2Neg] = areaTa[aa2Neg]/8
+    del aa2Neg, areaTa
     # voroni area at beta-side when triangle is obtuse but not in i-angle
-    Av[:,1][bb0Neg] = areaTb[bb0Neg]/8 
+    bb0Neg = bb[:,0]<0
+    Av[:,1][bb0Neg] = areaTb[bb0Neg]/8
+    del bb0Neg
+    bb2Neg = bb[:,2]<0
+    del bb
     Av[:,1][bb2Neg] = areaTb[bb2Neg]/8
+    del bb2Neg, areaTb
 
     # calc. Area mixed (Amxd) and mean curvature (kH) per vertex
     Amxd = np.zeros(len(verts), dtype=verts.dtype)
     kH = np.zeros(len(verts), dtype=verts.dtype)
     norm = nV[nbrLB[:,0]]
-    dotprd = wab[:,0]*norm[:,0] + wab[:,1]*norm[:,1] + wab[:,2]*norm[:,2] 
+    del nV
+    dotprd = wab[:,0]*norm[:,0] + wab[:,1]*norm[:,1] + wab[:,2]*norm[:,2]
+    del norm, wab
     kk = (cota + cotb) * dotprd # per edge (i,j)
+    del cota, cotb, dotprd
     for i in range(len(verts)):
         # Av's are voroni area per edge (i,j)
         # Av[:,0] & Av[:,1] for alpha & beta sides respec.
@@ -1184,6 +1214,7 @@ def MeanGaussianPrincipalCurvatures(verts, nV, nbrLB, *args):
         if Amxd[i] == 0:    # to prevent devision-by-zero error
             Amxd[i] = 2.2250738585072014e-308
         kH[i] = 0.25*np.sum(kk[crit])/Amxd[i] # for vertex i
+    del Av, kk
 
 
     # wieght func. (wf) for anisotropic diffusion
@@ -1194,12 +1225,15 @@ def MeanGaussianPrincipalCurvatures(verts, nV, nbrLB, *args):
         tasum = np.zeros(len(verts), dtype=verts.dtype)
         # uawab is dotprod of two edges making theta (ta) angle at vertex i
         l2 = np.sqrt(l2ua*l2wab)
+        del l2ua, l2wab
         l2[l2==0] = 2.2250738585072014e-308 # to prevent devision-by-zero error
-        costa = uawab/l2 # cos(ta)
-        ta = np.arccos(costa)
+        # costa = uawab/l2 # cos(ta)
+        ta = np.arccos(uawab/l2)
+        del uawab, l2
         for i in range(len(tasum)):
             tasum[i] = np.sum(ta[nbrLB[:,0]==i])
             kG[i] = (2*np.pi - tasum[i])/Amxd[i]
+        del tasum, ta, Amxd, nbrLB
 
         # principal curvatures (k1, k2)
         dlta = kH**2 - kG
@@ -1207,6 +1241,7 @@ def MeanGaussianPrincipalCurvatures(verts, nV, nbrLB, *args):
         dlta = np.sqrt(dlta)
         k1 = kH + dlta
         k2 = kH - dlta
+        del dlta
 
         # weight function (wf) for smoothing by aniso. diff.
         wf = np.ones(len(verts), dtype=verts.dtype)
@@ -1223,39 +1258,46 @@ def MeanGaussianPrincipalCurvatures(verts, nV, nbrLB, *args):
         # initialization by values larger than all curvatures
         mx = 1.1*max(np.max(kHabs), np.max(k1abs), np.max(k2abs))
         msk2 = mx*np.ones(len(verts), dtype=verts.dtype)
+        del mx, verts
         for i in range(len(msk2)):
             if kHabs[i] != 0: # to avoid devision by zero @ wf=k1/kH or k2/kH
                 msk2[i] = min(k1abs[i], k2abs[i], kHabs[i])
+        del kHabs
         # for geometric or feature edges (not mesh edges), 
         # smoothing speed proportional to min curvature
         crit1 = k1abs==msk2
+        del k1abs
         crit2 = k2abs==msk2
+        del k2abs, msk2
         wf[crit1] = k1[crit1]/kH[crit1]
+        del crit1
         wf[crit2] = k2[crit2]/kH[crit2]   
+        del crit2
         # 3 lines below commented out; as wf is initialized by np.ones 
         #msk3 = np.logical_and(k1abs<=TT, k2abs<=TT)
         #wf[msk3] = 1    # isotropic smoothing for noisy regions
         #wf[kHabs==msk2] = 1 # isotropic smoothing for noisy regions
         wf[wf<-0.1] = -0.1 # stability thresh. to avoid strong inverse diff.
-
         wf = wf*kH
+        #del kH
         # in smoothing by anis. diff. the verts are moved along
         # their unit normal vectors by wf*kH (x_new = x_old -(wf*kH)*normal)
         # in isotropic diffusion wf's simply mean curvature. kH (below)
     else:
         wf = kH
-    
-    # max triangle area in the mesh
-    maxa = 0.5*max(np.max(areaTa), np.max(areaTb[areaTb>0]))
-
-    # res = kH, kG, k1, k2      # returns all curvatures
-    res = (wf, maxa)
-    return res
+        del kH, nbrLB, verts, Amxd, uawab, l2ua, l2wab
+    # return kH, kG, k1, k2      # returns all curvatures
+    return wf, maxa
 
 
 def MeanCurvatures(verts, nV, nbrLB):
-    # this func. is copied from MeanGaussianPrincipalCurvatures()
-    # returns mean curvature only
+    # returns a weight func.(wf) for smoothing triangle mesh data
+    # returns also max triangle area
+    # defualt wf is the mean curvature as in isotropic diffusion smoothing.
+    # wf is calculated by anisotropic diffusion method, only 
+    # if 'anis_diff' if given as args. In this method, Gaussian and 
+    # principle curvatures are also calculated to find wf.
+
     # For details of the method, check:
     # "Discrete Differential-Geometry Operators for Triangulated 2-Manifolds"
     # by Meyer, Desbrun, Schroderl, Barr, 2003, Springer
@@ -1264,15 +1306,20 @@ def MeanCurvatures(verts, nV, nbrLB):
     # verts inside mesh have both alpha and beta angles
     # verts on the boundaries have only alpha angle
     # a for alpha-side and b for beta-side of an edge (i-j)
-    withOutBeta = nbrLB[:,3]==-1
-    withBeta = nbrLB[:,3]!=-1
-    vr = verts[nbrLB] # vertices
+    vr0 = verts[nbrLB[:,0]] # vertices
+    vr1 = verts[nbrLB[:,1]] # vertices
+    vr2 = verts[nbrLB[:,2]] # vertices
+    vr3 = verts[nbrLB[:,3]] # vertices
     # triangle sides (edges)
-    ua = vr[:,0] - vr[:,2] # vectors for edges
-    va = vr[:,1] - vr[:,2]
-    wab = vr[:,0] - vr[:,1]
-    ub = vr[:,0] - vr[:,3]
-    vb = vr[:,1] - vr[:,3]
+    ua = vr0 - vr2 # vectors for edges
+    va = vr1 - vr2
+    del vr2
+    wab = vr0 - vr1
+    ub = vr0 - vr3
+    del vr0
+    vb = vr1 - vr3
+    del vr1, vr3
+    withOutBeta = nbrLB[:,3]==-1
     ub[withOutBeta] = 0 # setting side ub to zero when beta doesn't exist
     vb[withOutBeta] = 0 # setting side vb to zero when beta doesn't exist
 
@@ -1284,75 +1331,100 @@ def MeanCurvatures(verts, nV, nbrLB):
     vbwab = vb[:,0]*wab[:,0] + vb[:,1]*wab[:,1] + vb[:,2]*wab[:,2]
 
     l2ua = ua[:,0]**2 + ua[:,1]**2 + ua[:,2]**2 # squared of lengths
+    del ua
     l2va = va[:,0]**2 + va[:,1]**2 + va[:,2]**2
+    del va
     l2wab = wab[:,0]**2 + wab[:,1]**2 + wab[:,2]**2
     l2ub = ub[:,0]**2 + ub[:,1]**2 + ub[:,2]**2
+    del ub
     l2vb = vb[:,0]**2 + vb[:,1]**2 + vb[:,2]**2
+    del vb
 
     # 2x Triangle area on alpha and beta sides of i,j edge
     areaTa = np.sqrt(l2ua*l2va-(uava**2))
+    del l2ua, l2va
     areaTb = np.sqrt(l2ub*l2vb-(ubvb**2))
+    del l2ub, l2vb
     # smoothing may sometimes squeeze all 3 verts of a face so close
     # that the area becomes zero. This causes zero-division warning
     # & potentially errors. The two lines below is to prevent this!
     areaTa[areaTa==0] = 2.2250738585072014e-308
     areaTb[areaTb==0] = 2.2250738585072014e-308
-
+    # max triangle area in the mesh
+    maxa = 0.5*max(np.max(areaTa), np.max(areaTb[areaTb>0]))
+    
     cota = uava/areaTa  # cot(alpha)
     cotb = np.zeros(shape=cota.shape, dtype=cota.dtype)
     # cot(beta), when beta exists
+    withBeta = nbrLB[:,3]!=-1
     cotb[withBeta] = ubvb[withBeta]/areaTb[withBeta]
+    del withBeta
     cotb[withOutBeta] = 0  # when beta doesn't exist (edge in boundary)
+    del withOutBeta
     
     # three dot products to see if a triangle is obtuse
     # axis0 (alpha & beta); axis1 (angle by vert i); axis2 (the other angle)
     aa = np.vstack((uava, uawab, -vawab)).T
+    del uava, vawab, uawab
     bb = np.vstack((ubvb, ubwab, -vbwab)).T
-    # True if all three are positive (all angles>=90)
-    aasgn = np.logical_and(aa[:,0]>=0, aa[:,1]>=0, aa[:,2]>=0)
-    bbsgn = np.logical_and(bb[:,0]>=0, bb[:,1]>=0, bb[:,2]>=0)
+    del ubvb, ubwab, vbwab  
     
     # Av (A_voroni) stores areas of alpha and beta sides in its axes 0, 1
     Av = np.zeros(shape=(len(nbrLB),2), dtype=verts.dtype)
-    aaAllPos = aasgn == True
-    bbAllPos = bbsgn == True
-    aa1Neg = aa[:,1]<0
-    bb1Neg = bb[:,1]<0
-    aa0Neg = aa[:,0]<0
-    bb0Neg = bb[:,0]<0
-    aa2Neg = aa[:,2]<0
-    bb2Neg = bb[:,2]<0
+    # True if all three are positive (all angles>=90)
+    aaAllPos = np.logical_and(aa[:,0]>=0, aa[:,1]>=0, aa[:,2]>=0) == True
     # voroni area where triangle in alpha-side is not obtuse
     Av[:,0][aaAllPos] = cota[aaAllPos]*l2wab[aaAllPos]/8
+    del aaAllPos
+    # True if all three are positive (all angles>=90)
+    bbAllPos = np.logical_and(bb[:,0]>=0, bb[:,1]>=0, bb[:,2]>=0) == True
     # voroni area where triangle in beta-side is not obtuse
     Av[:,1][bbAllPos] = cotb[bbAllPos]*l2wab[bbAllPos]/8
+    del bbAllPos, l2wab
     # voroni area at alpha-side when triangle is obtuse at i-angle
+    aa1Neg = aa[:,1]<0
     Av[:,0][aa1Neg] = areaTa[aa1Neg]/4
+    del aa1Neg
     # voroni area at beta-side when triangle is obtuse at i-angle
+    bb1Neg = bb[:,1]<0
     Av[:,1][bb1Neg] = areaTb[bb1Neg]/4
+    del bb1Neg
     # voroni area at alpha-side when triangle is obtuse but not in i-angle
+    aa0Neg = aa[:,0]<0
     Av[:,0][aa0Neg] = areaTa[aa0Neg]/8
+    del aa0Neg
+    aa2Neg = aa[:,2]<0
+    del aa
     Av[:,0][aa2Neg] = areaTa[aa2Neg]/8
+    del aa2Neg, areaTa
     # voroni area at beta-side when triangle is obtuse but not in i-angle
-    Av[:,1][bb0Neg] = areaTb[bb0Neg]/8 
+    bb0Neg = bb[:,0]<0
+    Av[:,1][bb0Neg] = areaTb[bb0Neg]/8
+    del bb0Neg
+    bb2Neg = bb[:,2]<0
+    del bb
     Av[:,1][bb2Neg] = areaTb[bb2Neg]/8
+    del bb2Neg, areaTb
 
     # calc. Area mixed (Amxd) and mean curvature (kH) per vertex
     Amxd = np.zeros(len(verts), dtype=verts.dtype)
     kH = np.zeros(len(verts), dtype=verts.dtype)
     norm = nV[nbrLB[:,0]]
-    dotprd = wab[:,0]*norm[:,0] + wab[:,1]*norm[:,1] + wab[:,2]*norm[:,2] 
+    del nV
+    dotprd = wab[:,0]*norm[:,0] + wab[:,1]*norm[:,1] + wab[:,2]*norm[:,2]
+    del norm, wab
     kk = (cota + cotb) * dotprd # per edge (i,j)
+    del cota, cotb, dotprd
     for i in range(len(verts)):
         # Av's are voroni area per edge (i,j)
-        # Av[:,0] & Av[:,1] for alpha & beta sides respectively
+        # Av[:,0] & Av[:,1] for alpha & beta sides respec.
         # Amxd's are voroni area per vertex (i)
         crit = nbrLB[:,0]==i
         Amxd[i] = np.sum(Av[:,0][crit]) + np.sum(Av[:,1][crit])
         if Amxd[i] == 0:    # to prevent devision-by-zero error
             Amxd[i] = 2.2250738585072014e-308
         kH[i] = 0.25*np.sum(kk[crit])/Amxd[i] # for vertex i
-    
+    del Av, kk, Amxd, nbrLB, verts
     return kH
 
 
@@ -1458,6 +1530,193 @@ def smoothing(verts, faces, nbrLB, **kwargs):
         mm += 1
     del VV, tune, smooth, constr, maxa       
     return verts # smoothed verts
+
+
+def smoothing_parallel_incomplete(verts, faces, **kwargs):
+    # parallization of smoothing func. by domain decomposition 
+    # i.e. splitting a mesh into smaller chunks
+    # The parallelization is not trivial because the values of normals, voroni
+    # area, curvature etc. at boundaries of chunks requires values from other chunks!
+
+    # smooths a triangulated mesh e.g.the WN-interface
+    # receives verts, faces, & Laplace-Beltrami neighborhood map (nbrLB) of verts
+    # returns smoothed verts
+
+    def arraySplitter(arr, **kwargs):
+        L2 = 256000*8 # CPU L2-cache memory size in bit
+        # mm_default = max(1, int(len(arr)/50000))
+        mm_default = max(1, int(arr.size*32/L2))
+        mm = kwargs.get('num_chunks', mm_default)
+        d = int(len(arr)/mm)
+        chunk_idx = []
+        for k in range(mm):
+            low = k*d
+            if k < mm-1:
+                high = (k+1)*d
+            else:
+                high = (k+1)*d + len(arr)%mm
+            chunk_idx.append([low,high])
+        return chunk_idx   
+
+        
+
+    def verticesUnitNormalsParallel():
+
+        def facesUnitNormalsSequential(U):
+            # returns the unit normals of faces
+            l, h = U[0], U[1]
+            tris = verts[faces[l:h]]      
+            nF[l:h] = np.cross(tris[:,1] - tris[:,0], tris[:,2] - tris[:,0])
+            nF[l:h] = unitVector(nF[l:h]) # normalizing (length=1)
+
+
+        def verticesNormalsSequential(U):
+            # returns the unit normals of vertices
+            # norms of a vertex found by adding norms of faces surrounding vertex
+            l, h = U[0], U[1]
+            nV[faces[l:h][:,0]] += nF[l:h]
+            nV[faces[l:h][:,1]] += nF[l:h]
+            nV[faces[l:h][:,2]] += nF[l:h]
+            # nV not normalized yet!
+
+    
+        #@jit(nopython=True)
+        def unitVectorSequential(U):
+            # returns array of unit vectors of a np.array with shape=(n,3)
+            l, h = U[0], U[1]
+            leng = np.sqrt(nV[l:h][:,0]**2 + nV[l:h][:,1]**2 + nV[l:h][:,2]**2)
+            leng[leng==0]= 2.2250738585072014e-308 # avoids devision by zero if vector is for ex. (0,0,0)
+            nV[l:h][:,0] /= leng
+            nV[l:h][:,1] /= leng
+            nV[l:h][:,2] /= leng
+
+        ## defining nF (norm faces) and nV (norm vertices) for entire domain
+        nF = np.zeros(faces.shape, dtype=verts.dtype) # dtype the same as verts
+        nV = np.zeros(verts.shape, dtype=verts.dtype)
+        ## finding normals at faces (embarrassingly parallel)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executer:
+            for stuff in executer.map(facesUnitNormalsSequential, subfaces):
+                pass
+        # finding normals at verts (embarrassingly parallel) - nV not yet normalized (leng!=1)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executer:
+            for stuff in executer.map(verticesNormalsSequential, subfaces):
+                pass
+        # normalizing (length = 1) nV's (embarrassingly parallel)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executer:
+            for stuff in executer.map(unitVectorSequential, subverts):
+                pass
+        del nF
+        return nV
+
+
+    # splitting faces, verts, nbrLB to smaller chunks
+    subfaces = arraySplitter(faces)
+    subverts = arraySplitter(verts)
+    # subnbrLB = arraySplitter(nbrLB)
+   
+    print('\nsmoothing iteration num.')
+    verts_original = np.copy(verts)
+    nV = verticesUnitNormalsParallel() # computing normals @ verts
+    
+    # weight called to calc. min/max triangle area; wt unimportant here
+    #wt, max_A = MeanGaussianPrincipalCurvatures(verts, nV, nbrLB)
+    ########### test allocations in weight function/ parallelize weight function
+
+
+
+    # # new verts, smoothing criteria, verts distance from originals, 
+    # # & min/max face area @ iterations 
+    # # averageAllDotProducts returns average for dot products of all 
+    # # neighbors' unit normals
+    # # smoother surface will have an average approaching unity
+    # VV, smooth, constr, maxa = [], [], [], []
+    # smooth.append(np.float64(averageAllDotProducts(nbrLB, nV))) # at original verts
+    # constr.append(np.float64(0))
+    # maxa.append(max_A)
+    # VV.append(verts)
+    # # mm is iter. counter @ while loop (must start @ 1)
+    # # the convergence is checked every nn iters.
+    # condition, mm, nn = True, 1, 50
+    # # DD max distance of each vertex from its original value
+    # DD_default = 1.7 # default DD is sqrt(3) - longest diam. in a voxel
+    # method = kwargs.get('method')
+    # DD = kwargs.get('verts_constraint', DD_default)
+
+    # while condition:    # smoothing loop
+    #     print(mm, end="  ")
+    #     # verts tuned by moving along their unit normals
+    #     # movement has a weight function (func. weight)
+    #     # @ isotropic diff. weights are mean curvatures
+    #     # @ aniso. diff. weights have feature/noise detection
+    #     # by a thresholding variable (see TT @ wieght func.)
+    #     # weights are multiplied by 0.1 to ensure not-to-fast
+    #     # changes. This seems to be necessary in complex shapes.
+    #     # new_vert = vert - 0.1*(weight)*(unit normal at vert)
+    #     if method == 'aniso_diff':
+    #         tune, max_a = MeanGaussianPrincipalCurvatures(\
+    #                                 VV[mm-1], nV, nbrLB, 'aniso_diff')
+    #     else:
+    #         tune, max_a = MeanGaussianPrincipalCurvatures(\
+    #                                 VV[mm-1], nV, nbrLB)
+    #     tune = (nV.T*tune).T
+    #     verts_itr = VV[mm-1] - 0.1*tune
+    #     # comparing verts_itr with the originals & correcting the jumped ones
+    #     # constraint is not to have displacement more than DD at every vert
+    #     # if disp. is more than DD, vertex goes back to value @ previous iter.
+    #     dd = sum(((verts_original - verts_itr)**2).T) # squared of distances
+    #     nojump = dd >= DD**2
+    #     verts_itr[:,0][nojump] = VV[mm-1][:,0][nojump]
+    #     verts_itr[:,1][nojump] = VV[mm-1][:,1][nojump]
+    #     verts_itr[:,2][nojump] = VV[mm-1][:,2][nojump]
+
+    #     nV = verticesUnitNormals(verts_itr, faces) # update norms with new verts
+    #     VV.append(verts_itr) # save new verts
+    #     maxa.append(max_a)
+    #     # sum of squared of distance difference of updated and original verts
+    #     constr.append(sum(dd)) #constr.append(sum(np.sqrt(dd)))
+    #     smooth.append(np.float64(averageAllDotProducts(nbrLB, nV)))
+
+    #     if mm % nn == 0: # true at every nn-th iter.
+    #         # checks if iteration should be ended
+    #         # criteria 1
+    #         # true when max smooth in the last nn iterations
+    #         # happens before the very last iteration.
+    #         kk = np.argmax(smooth)
+    #         crit1 = kk < mm
+    #         # criteria 2
+    #         # true when the very last two iter's have a diff. less than 1e-06
+    #         crit2 = abs(smooth[-1] - smooth[-2]) <= 1e-06
+
+    #         if crit1 or crit2:
+    #             # update verts with the ones gave max avg. dot prods. & stop iter.
+    #             verts = VV[kk]
+    #             condition = False
+    #             print('\n##############   Smoothing summary   ###############\n')
+    #             print('printing initial (iter. 0) & last ', nn, 'iter.\n' )
+    #             print('iter. nr.', 2*' ','ave. dot prods', 2*' ',\
+    #                     'sum squared dist. from initial',\
+    #                     3*' ', 'max triangle area')
+    #             # printing 1st iter.
+    #             print('0', 14*' ', smooth[0].round(7), 11*' ',\
+    #                        constr[0].round(4), 22*' ', maxa[0].round(4))
+    #             # printing last nn iter.
+    #             for ii in range(mm+1-nn, mm+1):
+    #                 print(ii, 14*' ', smooth[ii].round(7), 11*' ',\
+    #                         constr[ii].round(4), 22*' ', maxa[ii].round(4))        
+    #             print('\naverage for dot products of all neighbour unit', \
+    #                     'normals is max at iter.', kk)
+    #             print('the max of avg. dot products is', smooth[kk].round(5), \
+    #                     'and sum of squared distance of verts from their originals is',\
+    #                     constr[kk].round(2),'\n')
+    #         if kk == mm:
+    #             # smooth may still increase, so iter. does not stop
+    #             VV[mm-nn:mm] = [-1]*nn
+    #             # replaces unnecessary & large elements of VV with an integer
+    #             # only last element is needed for further iter.
+    #     mm += 1
+    # del VV, tune, smooth, constr, maxa       
+    # return verts # smoothed verts
+    return nV
 
 
 def smoothing_stdev(verts, faces, nbrLB, **kwargs):
@@ -1725,8 +1984,8 @@ def main():
             # unnecessary extra boundary layers removed, yet fluids do not touch bondary
             #img = img[0 : img.shape[0] , 26 : 720, 23 : 722]
             #####################
-            print('{} nonwetting, {} wetting, voxels:'\
-                    .format(np.sum(img == 0), np.sum(img == 1), '\n'))
+            # print('{} nonwetting, {} wetting, voxels:'\
+                   # .format(np.sum(img == 0), np.sum(img == 1), '\n'))
             N = np.where(img == 0, img, -1) # contains only nonwetting (0); rest -1
             W = np.where(img == 1, img, 0)  # contains only wetting (1); rest 0
             # S = np.where(img == 2, img, 0)  # contains solid plus boundary (2); rest 0
@@ -1735,10 +1994,11 @@ def main():
             lbld_W, nr_blb_W = ndimage.measurements.label(W)
             lbld_N, nr_blb_N = ndimage.measurements.label(N)
             print(nr_blb_W, 'isolated wetting blob(s)')
-            print(nr_blb_N, 'isolated nonwetting blob(s)', '\n')
+            # print(nr_blb_N, 'isolated nonwetting blob(s)', '\n')
             # returns which wetting and nonwetting blobs are neighbors
-            print('finding neighbor blobs of vol. A & vol. B, eg. wetting & nonwetting neighbor blobs:')
-            nbr_blobs = labeledVolSetA_labeledVolSetB_neighbor_blobs(lbld_W, lbld_N)
+            # print('finding neighbor blobs of vol. A & vol. B, eg. wetting & nonwetting neighbor blobs:')
+            
+            # nbr_blobs = labeledVolSetA_labeledVolSetB_neighbor_blobs(lbld_W, lbld_N)
 
             # ################################# testing ###################################
             # blb_W = np.where(lbld_W == 1, lbld_W, 0) # wetting (W) blob
