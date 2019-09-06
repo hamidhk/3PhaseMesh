@@ -1999,19 +1999,19 @@ def main():
             #####################
             # print('{} nonwetting, {} wetting, voxels:'\
                    # .format(np.sum(img == 0), np.sum(img == 1), '\n'))
-            N = np.where(img == 0, img, -1) # contains only nonwetting (0); rest -1
-            W = np.where(img == 1, img, 0)  # contains only wetting (1); rest 0
-            # S = np.where(img == 2, img, 0)  # contains solid plus boundary (2); rest 0
+            N = np.where(img == 0, img, -1) + 1     # contains only nonwetting (1); rest 0
+            W = np.where(img == 1, img, 0)          # contains only wetting (1); rest 0
+            # S = np.where(img == 2, img, 1) -1       # contains solid plus boundary (1); rest 0
             # W=W[0:50, 0:151, 0:153] #creating a small test volume
             # N=N[0:50, 0:151, 0:153]
             lbld_W, nr_blb_W = ndimage.measurements.label(W)
             lbld_N, nr_blb_N = ndimage.measurements.label(N)
             print(nr_blb_W, 'isolated wetting blob(s)')
-            # print(nr_blb_N, 'isolated nonwetting blob(s)', '\n')
-            # returns which wetting and nonwetting blobs are neighbors
-            # print('finding neighbor blobs of vol. A & vol. B, eg. wetting & nonwetting neighbor blobs:')
+            print(nr_blb_N, 'isolated nonwetting blob(s)', '\n')
+            returns which wetting and nonwetting blobs are neighbors
+            print('finding neighbor blobs of vol. A & vol. B, eg. wetting & nonwetting neighbor blobs:')
             
-            # nbr_blobs = labeledVolSetA_labeledVolSetB_neighbor_blobs(lbld_W, lbld_N)
+            nbr_blobs = labeledVolSetA_labeledVolSetB_neighbor_blobs(lbld_W, lbld_N)
 
             # ################################# testing ###################################
             # blb_W = np.where(lbld_W == 1, lbld_W, 0) # wetting (W) blob
