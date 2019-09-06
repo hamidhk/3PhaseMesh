@@ -797,6 +797,7 @@ def verticesUnitNormals(verts, faces):
     tris = verts[faces]
     # normals of faces         
     nFace = np.cross(tris[:,1] - tris[:,0], tris[:,2] - tris[:,0])
+    del tris
     nFace = unitVector(nFace) # normalizing (length=1)
     nVerts = np.zeros(verts.shape, dtype=verts.dtype)
     # norms of a vertex found by adding norms of faces surrounding vertex
@@ -811,6 +812,7 @@ def facesUnitNormals(verts, faces):
     # returns the unit normals of faces
     tris = verts[faces]      
     nFace = np.cross(tris[:,1] - tris[:,0], tris[:,2] - tris[:,0])
+    del tris
     nFace = unitVector(nFace) # normalizing (length=1)
     return nFace
 
@@ -1433,11 +1435,10 @@ def smoothing(verts, faces, nbrLB, **kwargs):
     # receives verts, faces, & Laplace-Beltrami neighborhood map (nbrLB) of verts
     # returns smoothed verts
     print('\nsmoothing iteration num.')
-    verts_original = np.copy(verts)
     nV = verticesUnitNormals(verts, faces) # unit normals of verts
     # weight called to calc. min/max triangle area; wt unimportant here
     wt, max_A = MeanGaussianPrincipalCurvatures(verts, nV, nbrLB)
-
+    del wt
     # new verts, smoothing criteria, verts distance from originals, 
     # & min/max face area @ iterations 
     # averageAllDotProducts returns average for dot products of all 
@@ -1448,6 +1449,7 @@ def smoothing(verts, faces, nbrLB, **kwargs):
     constr.append(np.float64(0))
     maxa.append(max_A)
     VV.append(verts)
+    del verts
     # mm is iter. counter @ while loop (must start @ 1)
     # the convergence is checked every nn iters.
     condition, mm, nn = True, 1, 50
@@ -1455,6 +1457,7 @@ def smoothing(verts, faces, nbrLB, **kwargs):
     DD_default = 1.7 # default DD is sqrt(3) - longest diam. in a voxel
     method = kwargs.get('method')
     DD = kwargs.get('verts_constraint', DD_default)
+    verts_original = np.copy(VV[0])
 
     while condition:    # smoothing loop
         print(mm, end="  ")
@@ -1472,24 +1475,27 @@ def smoothing(verts, faces, nbrLB, **kwargs):
         else:
             tune, max_a = MeanGaussianPrincipalCurvatures(\
                                     VV[mm-1], nV, nbrLB)
-        tune = (nV.T*tune).T
-        verts_itr = VV[mm-1] - 0.1*tune
+        verts_itr = VV[mm-1] - 0.1*(nV.T*tune).T
+        del tune, nV
         # comparing verts_itr with the originals & correcting the jumped ones
         # constraint is not to have displacement more than DD at every vert
         # if disp. is more than DD, vertex goes back to value @ previous iter.
         dd = sum(((verts_original - verts_itr)**2).T) # squared of distances
-        nojump = dd >= DD**2
-        verts_itr[:,0][nojump] = VV[mm-1][:,0][nojump]
-        verts_itr[:,1][nojump] = VV[mm-1][:,1][nojump]
-        verts_itr[:,2][nojump] = VV[mm-1][:,2][nojump]
-
-        nV = verticesUnitNormals(verts_itr, faces) # update norms with new verts
-        VV.append(verts_itr) # save new verts
-        maxa.append(max_a)
+        jump = dd >= DD**2 # binary mask, True if a vertex jumped over constraint
+        dd = sum(dd)
+        verts_itr[:,0][jump] = VV[mm-1][:,0][jump]
+        verts_itr[:,1][jump] = VV[mm-1][:,1][jump]
+        verts_itr[:,2][jump] = VV[mm-1][:,2][jump]
+        del jump
         # sum of squared of distance difference of updated and original verts
-        constr.append(sum(dd)) #constr.append(sum(np.sqrt(dd)))
-        smooth.append(np.float64(averageAllDotProducts(nbrLB, nV)))
+        constr.append(dd) #constr.append(sum(np.sqrt(dd)))
+        VV.append(verts_itr) # save new verts
+        del verts_itr
+        maxa.append(max_a)
 
+        nV = verticesUnitNormals(VV[-1], faces) # update norms with new verts
+        smooth.append(np.float64(averageAllDotProducts(nbrLB, nV)))
+ 
         if mm % nn == 0: # true at every nn-th iter.
             # checks if iteration should be ended
             # criteria 1
@@ -1503,7 +1509,9 @@ def smoothing(verts, faces, nbrLB, **kwargs):
 
             if crit1 or crit2:
                 # update verts with the ones gave max avg. dot prods. & stop iter.
+                del nbrLB, faces, nV
                 verts = VV[kk]
+                VV[kk] = -1
                 condition = False
                 print('\n##############   Smoothing summary   ###############\n')
                 print('printing initial (iter. 0) & last ', nn, 'iter.\n' )
@@ -1528,7 +1536,7 @@ def smoothing(verts, faces, nbrLB, **kwargs):
                 # replaces unnecessary & large elements of VV with an integer
                 # only last element is needed for further iter.
         mm += 1
-    del VV, tune, smooth, constr, maxa       
+    del VV, smooth, constr, maxa       
     return verts # smoothed verts
 
 
@@ -1567,6 +1575,7 @@ def smoothing_parallel_incomplete(verts, faces, **kwargs):
             l, h = U[0], U[1]
             tris = verts[faces[l:h]]      
             nF[l:h] = np.cross(tris[:,1] - tris[:,0], tris[:,2] - tris[:,0])
+            del tris
             nF[l:h] = unitVector(nF[l:h]) # normalizing (length=1)
 
 
@@ -1607,8 +1616,6 @@ def smoothing_parallel_incomplete(verts, faces, **kwargs):
                 pass
         del nF
         return nV
-
-
     # splitting faces, verts, nbrLB to smaller chunks
     subfaces = arraySplitter(faces)
     subverts = arraySplitter(verts)
@@ -1728,7 +1735,6 @@ def smoothing_stdev(verts, faces, nbrLB, **kwargs):
     nV = verticesUnitNormals(verts, faces) # unit normals of verts
     # weight called to calc. min/max triangle area; wt unimportant here
     wt, max_A = MeanGaussianPrincipalCurvatures(verts, nV, nbrLB)
-
     # new verts, smoothing criteria, verts distance from originals, 
     # & min/max face area @ iterations 
     # averageAllDotProducts returns average for dot products of all 
@@ -1736,9 +1742,11 @@ def smoothing_stdev(verts, faces, nbrLB, **kwargs):
     # smoother surface will have a average approaching unity
     VV, smooth, constr,  maxa = [], [], [], []
     smooth.append(np.std(wt)) # at original verts
+    del wt
     constr.append(np.float64(0))
     maxa.append(max_A)
     VV.append(verts)
+    del verts
     # mm is iter. counter @ while loop (must start @ 1)
     # the convergence is checked every nn iters.
     condition, mm, nn = True, 1, 50
@@ -1758,28 +1766,31 @@ def smoothing_stdev(verts, faces, nbrLB, **kwargs):
         # changes. This seems to be necessary in complex shapes.
         # new_vert = vert - 0.1*(weight)*(unit normal at vert)
         if method == 'aniso_diff':
-            tune0, max_a = MeanGaussianPrincipalCurvatures(\
+            tune, max_a = MeanGaussianPrincipalCurvatures(\
                                     VV[mm-1], nV, nbrLB, 'aniso_diff')
         else:
-            tune0, max_a = MeanGaussianPrincipalCurvatures(\
+            tune, max_a = MeanGaussianPrincipalCurvatures(\
                                     VV[mm-1], nV, nbrLB)
-        tune = (nV.T*tune0).T
-        verts_itr = VV[mm-1] - 0.1*tune
+        verts_itr = VV[mm-1] - 0.1*(nV.T*tune).T
+        smooth.append(np.std(tune))
+        del tune
         # comparing verts_itr with the originals & correcting the jumped ones
         # constraint is not to have displacement more than DD at every vert
         # if disp. is more than DD, vertex goes back to value @ previous iter.
         dd = sum(((verts_original - verts_itr)**2).T) # squared of distances
-        nojump = dd >= DD**2
-        verts_itr[:,0][nojump] = VV[mm-1][:,0][nojump]
-        verts_itr[:,1][nojump] = VV[mm-1][:,1][nojump]
-        verts_itr[:,2][nojump] = VV[mm-1][:,2][nojump]
-
-        nV = verticesUnitNormals(verts_itr, faces) # update norms with new verts
+        jump = dd >= DD**2 # binary mask, True if a vertex jumped over constraint
+        dd = sum(dd)
+        verts_itr[:,0][jump] = VV[mm-1][:,0][jump]
+        verts_itr[:,1][jump] = VV[mm-1][:,1][jump]
+        verts_itr[:,2][jump] = VV[mm-1][:,2][jump]
+        del jump
         VV.append(verts_itr) # save new verts
+        del verts_itr
         maxa.append(max_a)
         # sum of squared of distance difference of updated and original verts
-        constr.append(sum(dd)) #constr.append(sum(np.sqrt(dd)))
-        smooth.append(np.std(tune0))
+        constr.append(dd) #constr.append(sum(np.sqrt(dd)))
+
+        nV = verticesUnitNormals(VV[-1], faces) # update norms with new verts
 
         if mm % nn == 0: # true at every nn-th iter.
             # checks if iteration should be ended
@@ -1794,7 +1805,9 @@ def smoothing_stdev(verts, faces, nbrLB, **kwargs):
 
             if crit1 or crit2:
                 # update verts with the ones gave max avg. dot prods. & stop iter.
+                del nbrLB, faces, nV
                 verts = VV[kk-1]
+                VV[kk-1] = -1
                 condition = False
                 print('\n##############   Smoothing summary   ###############\n')
                 print('printing initial (iter. 0) & last ', nn, 'iter.\n' )
@@ -1819,7 +1832,7 @@ def smoothing_stdev(verts, faces, nbrLB, **kwargs):
                 # replaces unnecessary & large elements of VV with an integer
                 # only last element is needed for further iter.
         mm += 1
-    del VV, tune, smooth, constr, maxa       
+    del VV, smooth, constr, maxa       
     return verts # smoothed verts
 
 
