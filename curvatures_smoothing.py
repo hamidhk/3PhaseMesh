@@ -263,7 +263,7 @@ def meshA_meshB_common_surface(vertsA, facesA, vertsB, facesB):
         # with concurrent.futures.ThreadPoolExecutor() as executor:
         #     for inp, outp  in zip(lst, executor.map(sequential, lst)):
         #         pass
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             for outp  in executor.map(sequential, lst):
                 pass
 
@@ -348,7 +348,7 @@ def meshA_meshB_common_surface(vertsA, facesA, vertsB, facesB):
                 high = (k+1)*d + len(facesA)%n
             lst.append([low,high])
         # multi-threading
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             for inp, outp  in zip(lst, executor.map(sequential, lst)):
                 pass
         facesA = facesA[facesA2!=-2]
@@ -1434,7 +1434,7 @@ def smoothing(verts, faces, nbrLB, **kwargs):
     # smooths a triangulated mesh e.g.the WN-interface
     # receives verts, faces, & Laplace-Beltrami neighborhood map (nbrLB) of verts
     # returns smoothed verts
-    print('\nsmoothing iteration num.')
+    print('\nsmoothing iteration num.', flush=True)
     nV = verticesUnitNormals(verts, faces) # unit normals of verts
     # weight called to calc. min/max triangle area; wt unimportant here
     wt, max_A = MeanGaussianPrincipalCurvatures(verts, nV, nbrLB)
@@ -1460,7 +1460,7 @@ def smoothing(verts, faces, nbrLB, **kwargs):
     verts_original = np.copy(VV[0])
 
     while condition:    # smoothing loop
-        print(mm, end="  ")
+        print(mm, end="  ", flush=True)
         # verts tuned by moving along their unit normals
         # movement has a weight function (func. weight)
         # @ isotropic diff. weights are mean curvatures
@@ -1513,7 +1513,7 @@ def smoothing(verts, faces, nbrLB, **kwargs):
                 verts = VV[kk]
                 VV[kk] = -1
                 condition = False
-                print('\n##############   Smoothing summary   ###############\n')
+                print('\n##############   Smoothing summary   ###############\n', flush=True)
                 print('printing initial (iter. 0) & last ', nn, 'iter.\n' )
                 print('iter. nr.', 2*' ','ave. dot prods', 2*' ',\
                         'sum squared dist. from initial',\
@@ -1540,197 +1540,11 @@ def smoothing(verts, faces, nbrLB, **kwargs):
     return verts # smoothed verts
 
 
-def smoothing_parallel_incomplete(verts, faces, **kwargs):
-    # parallization of smoothing func. by domain decomposition 
-    # i.e. splitting a mesh into smaller chunks
-    # The parallelization is not trivial because the values of normals, voroni
-    # area, curvature etc. at boundaries of chunks requires values from other chunks!
-
-    # smooths a triangulated mesh e.g.the WN-interface
-    # receives verts, faces, & Laplace-Beltrami neighborhood map (nbrLB) of verts
-    # returns smoothed verts
-
-    def arraySplitter(arr, **kwargs):
-        L2 = 256000*8 # CPU L2-cache memory size in bit
-        # mm_default = max(1, int(len(arr)/50000))
-        mm_default = max(1, int(arr.size*32/L2))
-        mm = kwargs.get('num_chunks', mm_default)
-        d = int(len(arr)/mm)
-        chunk_idx = []
-        for k in range(mm):
-            low = k*d
-            if k < mm-1:
-                high = (k+1)*d
-            else:
-                high = (k+1)*d + len(arr)%mm
-            chunk_idx.append([low,high])
-        return chunk_idx   
-
-        
-
-    def verticesUnitNormalsParallel():
-
-        def facesUnitNormalsSequential(U):
-            # returns the unit normals of faces
-            l, h = U[0], U[1]
-            tris = verts[faces[l:h]]      
-            nF[l:h] = np.cross(tris[:,1] - tris[:,0], tris[:,2] - tris[:,0])
-            del tris
-            nF[l:h] = unitVector(nF[l:h]) # normalizing (length=1)
-
-
-        def verticesNormalsSequential(U):
-            # returns the unit normals of vertices
-            # norms of a vertex found by adding norms of faces surrounding vertex
-            l, h = U[0], U[1]
-            nV[faces[l:h][:,0]] += nF[l:h]
-            nV[faces[l:h][:,1]] += nF[l:h]
-            nV[faces[l:h][:,2]] += nF[l:h]
-            # nV not normalized yet!
-
-    
-        #@jit(nopython=True)
-        def unitVectorSequential(U):
-            # returns array of unit vectors of a np.array with shape=(n,3)
-            l, h = U[0], U[1]
-            leng = np.sqrt(nV[l:h][:,0]**2 + nV[l:h][:,1]**2 + nV[l:h][:,2]**2)
-            leng[leng==0]= 2.2250738585072014e-308 # avoids devision by zero if vector is for ex. (0,0,0)
-            nV[l:h][:,0] /= leng
-            nV[l:h][:,1] /= leng
-            nV[l:h][:,2] /= leng
-
-        ## defining nF (norm faces) and nV (norm vertices) for entire domain
-        nF = np.zeros(faces.shape, dtype=verts.dtype) # dtype the same as verts
-        nV = np.zeros(verts.shape, dtype=verts.dtype)
-        ## finding normals at faces (embarrassingly parallel)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executer:
-            for stuff in executer.map(facesUnitNormalsSequential, subfaces):
-                pass
-        # finding normals at verts (embarrassingly parallel) - nV not yet normalized (leng!=1)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executer:
-            for stuff in executer.map(verticesNormalsSequential, subfaces):
-                pass
-        # normalizing (length = 1) nV's (embarrassingly parallel)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executer:
-            for stuff in executer.map(unitVectorSequential, subverts):
-                pass
-        del nF
-        return nV
-    # splitting faces, verts, nbrLB to smaller chunks
-    subfaces = arraySplitter(faces)
-    subverts = arraySplitter(verts)
-    # subnbrLB = arraySplitter(nbrLB)
-   
-    print('\nsmoothing iteration num.')
-    verts_original = np.copy(verts)
-    nV = verticesUnitNormalsParallel() # computing normals @ verts
-    
-    # weight called to calc. min/max triangle area; wt unimportant here
-    #wt, max_A = MeanGaussianPrincipalCurvatures(verts, nV, nbrLB)
-    ########### test allocations in weight function/ parallelize weight function
-
-
-
-    # # new verts, smoothing criteria, verts distance from originals, 
-    # # & min/max face area @ iterations 
-    # # averageAllDotProducts returns average for dot products of all 
-    # # neighbors' unit normals
-    # # smoother surface will have an average approaching unity
-    # VV, smooth, constr, maxa = [], [], [], []
-    # smooth.append(np.float64(averageAllDotProducts(nbrLB, nV))) # at original verts
-    # constr.append(np.float64(0))
-    # maxa.append(max_A)
-    # VV.append(verts)
-    # # mm is iter. counter @ while loop (must start @ 1)
-    # # the convergence is checked every nn iters.
-    # condition, mm, nn = True, 1, 50
-    # # DD max distance of each vertex from its original value
-    # DD_default = 1.7 # default DD is sqrt(3) - longest diam. in a voxel
-    # method = kwargs.get('method')
-    # DD = kwargs.get('verts_constraint', DD_default)
-
-    # while condition:    # smoothing loop
-    #     print(mm, end="  ")
-    #     # verts tuned by moving along their unit normals
-    #     # movement has a weight function (func. weight)
-    #     # @ isotropic diff. weights are mean curvatures
-    #     # @ aniso. diff. weights have feature/noise detection
-    #     # by a thresholding variable (see TT @ wieght func.)
-    #     # weights are multiplied by 0.1 to ensure not-to-fast
-    #     # changes. This seems to be necessary in complex shapes.
-    #     # new_vert = vert - 0.1*(weight)*(unit normal at vert)
-    #     if method == 'aniso_diff':
-    #         tune, max_a = MeanGaussianPrincipalCurvatures(\
-    #                                 VV[mm-1], nV, nbrLB, 'aniso_diff')
-    #     else:
-    #         tune, max_a = MeanGaussianPrincipalCurvatures(\
-    #                                 VV[mm-1], nV, nbrLB)
-    #     tune = (nV.T*tune).T
-    #     verts_itr = VV[mm-1] - 0.1*tune
-    #     # comparing verts_itr with the originals & correcting the jumped ones
-    #     # constraint is not to have displacement more than DD at every vert
-    #     # if disp. is more than DD, vertex goes back to value @ previous iter.
-    #     dd = sum(((verts_original - verts_itr)**2).T) # squared of distances
-    #     nojump = dd >= DD**2
-    #     verts_itr[:,0][nojump] = VV[mm-1][:,0][nojump]
-    #     verts_itr[:,1][nojump] = VV[mm-1][:,1][nojump]
-    #     verts_itr[:,2][nojump] = VV[mm-1][:,2][nojump]
-
-    #     nV = verticesUnitNormals(verts_itr, faces) # update norms with new verts
-    #     VV.append(verts_itr) # save new verts
-    #     maxa.append(max_a)
-    #     # sum of squared of distance difference of updated and original verts
-    #     constr.append(sum(dd)) #constr.append(sum(np.sqrt(dd)))
-    #     smooth.append(np.float64(averageAllDotProducts(nbrLB, nV)))
-
-    #     if mm % nn == 0: # true at every nn-th iter.
-    #         # checks if iteration should be ended
-    #         # criteria 1
-    #         # true when max smooth in the last nn iterations
-    #         # happens before the very last iteration.
-    #         kk = np.argmax(smooth)
-    #         crit1 = kk < mm
-    #         # criteria 2
-    #         # true when the very last two iter's have a diff. less than 1e-06
-    #         crit2 = abs(smooth[-1] - smooth[-2]) <= 1e-06
-
-    #         if crit1 or crit2:
-    #             # update verts with the ones gave max avg. dot prods. & stop iter.
-    #             verts = VV[kk]
-    #             condition = False
-    #             print('\n##############   Smoothing summary   ###############\n')
-    #             print('printing initial (iter. 0) & last ', nn, 'iter.\n' )
-    #             print('iter. nr.', 2*' ','ave. dot prods', 2*' ',\
-    #                     'sum squared dist. from initial',\
-    #                     3*' ', 'max triangle area')
-    #             # printing 1st iter.
-    #             print('0', 14*' ', smooth[0].round(7), 11*' ',\
-    #                        constr[0].round(4), 22*' ', maxa[0].round(4))
-    #             # printing last nn iter.
-    #             for ii in range(mm+1-nn, mm+1):
-    #                 print(ii, 14*' ', smooth[ii].round(7), 11*' ',\
-    #                         constr[ii].round(4), 22*' ', maxa[ii].round(4))        
-    #             print('\naverage for dot products of all neighbour unit', \
-    #                     'normals is max at iter.', kk)
-    #             print('the max of avg. dot products is', smooth[kk].round(5), \
-    #                     'and sum of squared distance of verts from their originals is',\
-    #                     constr[kk].round(2),'\n')
-    #         if kk == mm:
-    #             # smooth may still increase, so iter. does not stop
-    #             VV[mm-nn:mm] = [-1]*nn
-    #             # replaces unnecessary & large elements of VV with an integer
-    #             # only last element is needed for further iter.
-    #     mm += 1
-    # del VV, tune, smooth, constr, maxa       
-    # return verts # smoothed verts
-    return nV
-
-
 def smoothing_stdev(verts, faces, nbrLB, **kwargs):
     # smooths a triangulated mesh e.g.the WN-interface
     # receives verts, faces, & Laplace-Beltrami neighborhood map (nbrLB) of verts
     # returns smoothed verts
-    print('\nsmoothing iteration num.')
+    print('\nsmoothing iteration num.', flush=True)
     verts_original = np.copy(verts)
     nV = verticesUnitNormals(verts, faces) # unit normals of verts
     # weight called to calc. min/max triangle area; wt unimportant here
@@ -1756,7 +1570,7 @@ def smoothing_stdev(verts, faces, nbrLB, **kwargs):
     DD = kwargs.get('verts_constraint', DD_default)
 
     while condition:    # smoothing loop
-        print(mm, end="  ")
+        print(mm, end="  ", flush=True)
         # verts tuned by moving along their unit normals
         # movement has a weight function (func. weight)
         # @ isotropic diff. weights are mean curvatures
@@ -1809,7 +1623,7 @@ def smoothing_stdev(verts, faces, nbrLB, **kwargs):
                 verts = VV[kk-1]
                 VV[kk-1] = -1
                 condition = False
-                print('\n##############   Smoothing summary   ###############\n')
+                print('\n##############   Smoothing summary   ###############\n', flush=True)
                 print('printing initial (iter. 0) & last ', nn, 'iter.\n' )
                 print('iter. nr.', 2*' ','std dev mean curv', 2*' ',\
                         'sum squared dist. from initial',\
@@ -1968,11 +1782,11 @@ def main():
     entries = listdir(path)
     for entry in entries:
         if entry.endswith('.mhd'):
-            print('Reading image', entry, 'as a numpy array')
+            print('Reading image', entry, 'as a numpy array', flush=True)
             # open .raw image  as np.array (z,y,x) using simpleitk plugin of skimage
             img = io.imread(path + entry, plugin='simpleitk')
             #img = io.imread('/home/hamidh/000_img/26_QS_MI_b_B_nlm.tif') # tif image
-            print('\nimage size & dimensions:', img.size, img.shape, '\n')
+            print('\nimage size & dimensions:', img.size, img.shape, '\n', flush=True)
             # io.imshow(img[300,:,:])
             # io.show()
             ####### extra #######
@@ -2002,14 +1816,15 @@ def main():
             N = np.where(img == 0, img, -1) + 1     # contains only nonwetting (1); rest 0
             W = np.where(img == 1, img, 0)          # contains only wetting (1); rest 0
             # S = np.where(img == 2, img, 1) -1       # contains solid plus boundary (1); rest 0
+            del img
             # W=W[0:50, 0:151, 0:153] #creating a small test volume
             # N=N[0:50, 0:151, 0:153]
             lbld_W, nr_blb_W = ndimage.measurements.label(W)
             lbld_N, nr_blb_N = ndimage.measurements.label(N)
-            print(nr_blb_W, 'isolated wetting blob(s)')
-            print(nr_blb_N, 'isolated nonwetting blob(s)', '\n')
-            returns which wetting and nonwetting blobs are neighbors
-            print('finding neighbor blobs of vol. A & vol. B, eg. wetting & nonwetting neighbor blobs:')
+            print(nr_blb_W, 'isolated wetting blob(s)', flush=True)
+            print(nr_blb_N, 'isolated nonwetting blob(s)', '\n', flush=True)
+            # returns which wetting and nonwetting blobs are neighbors
+            print('finding neighbor blobs of vol. A & vol. B, eg. wetting & nonwetting neighbor blobs:', flush=True)
             
             nbr_blobs = labeledVolSetA_labeledVolSetB_neighbor_blobs(lbld_W, lbld_N)
 
@@ -2045,9 +1860,9 @@ def main():
                         blb_W = np.where(lbld_W == blb, lbld_W, 0) # wetting (W) blob
                         vertsW, facesW, normsW, valsW = measure.marching_cubes_lewiner(blb_W) # mesh on W blob   
                         # wet or nonwet mesh is not water-tight if it touches img boundaries
-                        print('\n\n############### wetting blob ', blb, ' and nonwetting blob ', item[0], ' ###############')
-                        print('num. verts & faces in nonwetting mesh: ', len(vertsN), len(facesN)) 
-                        print('num. verts & faces in wetting mesh:', len(vertsW), len(facesW), '\n')
+                        print('\n\n############### wetting blob ', blb, ' and nonwetting blob ', item[0], ' ###############', flush=True)
+                        print('num. verts & faces in nonwetting mesh: ', len(vertsN), len(facesN), flush=True) 
+                        print('num. verts & faces in wetting mesh:', len(vertsW), len(facesW), '\n', flush=True)
                         # Very small mesh may be simply noise. It also has little or no impact in area/curvature measurement.
                         # We eliminate them from smoothing process to speed up & avoid possible errors.
                         if len(vertsW) > 22 and len(vertsN) > 22:
@@ -2070,9 +1885,9 @@ def main():
                         blb_N = np.where(lbld_N == blb, lbld_N, 0) # nonwetting (N) blob
                         vertsN, facesN, normsN, valsN = measure.marching_cubes_lewiner(blb_N) # mesh on N blob   
                         # wet or nonwet mesh is not water-tight if it touches img boundaries
-                        print('\n\n############### wetting blob ', item[0], ' and nonwetting blob ', blb, ' ###############')
-                        print('num. verts & faces in wetting mesh:', len(vertsW), len(facesW))
-                        print('num. verts & faces in nonwetting mesh: ', len(vertsN), len(facesN), '\n') 
+                        print('\n\n############### wetting blob ', item[0], ' and nonwetting blob ', blb, ' ###############', flush=True)
+                        print('num. verts & faces in wetting mesh:', len(vertsW), len(facesW), flush=True)
+                        print('num. verts & faces in nonwetting mesh: ', len(vertsN), len(facesN), '\n', flush=True) 
                         # Very small mesh may be simply noise. It also has little or no impact in area/curvature measurement.
                         # We eliminate them from smoothing process to speed up & avoid possible errors.
                         if len(vertsW) > 22 and len(vertsN) > 22:
@@ -2091,17 +1906,17 @@ def main():
             kHwn_all = np.array(kHwn_all)
             Awn_all = Awn_all[Awn_all!=np.inf]
             kHwn_all = kHwn_all[kHwn_all!=np.inf]
-            print('\n\n####################################################')
-            print('Summary for image: ', entry, '\n')
-            print('\n array of interfacial areas:', Awn_all)
-            print('\n array of mean curvatures:', kHwn_all)
+            print('\n\n####################################################', flush=True)
+            print('Summary for image: ', entry, '\n', flush=True)
+            print('\n array of interfacial areas:', Awn_all, flush=True)
+            print('\n array of mean curvatures:', kHwn_all, flush=True)
             # saving results of one image
             # saves two arrays in one file
             np.savez(entry + '_res', Awn_all, kHwn_all)
             Awn = np.sum(Awn_all)               # in squared meter
             Hwn = np.sum(kHwn_all*Awn_all)/Awn  # in 1/meter
             print('\nTotal interfacial area, Awn (m**2) & average of mean curvatures, Hwn (1/m) for image ',\
-                    entry, 'are: ', Awn, 'and ', Hwn)
+                    entry, 'are: ', Awn, 'and ', Hwn, flush=True)
 
             Awn_lst.append(Awn)
             Hwn_lst.append(Hwn)
