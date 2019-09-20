@@ -1,4 +1,4 @@
-# curvatures-smoothing-triangle-mesh
+# Image processing
 
 ## Curvature computation & smoothing for triangular mesh data by isotropic/anisotropic diffusion 
 This program is for smoothing triangulated mesh surfaces by calculation of mean curvatures. Smoothing can be performed by either isotropic or anisotropic diffusion. The latter has heavier computation where Gaussian and principal curvatures are also calculated in addition to the mean curvatures. The anisotropic diffusion smoothing is capable of feature/noise recognition. The isotropic diffusion suits smoothing of for instance fluid-fluid interfaces (in two fluid flow) whereas the anisotropic one respects the natural roughness of a surface; and it suits smoothing of for instance solid surfaces with natural roughness. The meshes are smoothed using contangent discretization of the Laplace-Beltrami operator. For details of the smoothing method, check
@@ -52,7 +52,7 @@ Smoothing of WN interface requires identification of the verts that are neighbor
 Function
 
 ```   
-verticesLaplaceBeltramiNeighborhood_parallel(faces, verts)
+verticesLaplaceBeltramiNeighborhoodParallel(faces, verts)
 ```
 
 receives faces and verts on a mesh and returns the neighborhood map in a structure that suits the Laplace-Beltrami smoothing. Creation of this structure requires extra time when constructing the neighborhood map, but it pays off later when curvatures are calculated in smoothing iterations, because regular loops can be avoided and the vectorization nature of the numpy calculations can be benefited. The construction of neighborhood map is sequential for small meshes and parallel for large meshes.
@@ -70,6 +70,7 @@ Smoothing requires the calculation of normal vectors at faces (triangles) and ve
 facesUnitNormals(verts, faces) 	  # normals of faces
 verticesUnitNormals(verts, faces) # normals of verts
 unitVector(vec)					  # normalization of vectors (length = 1)
+verticesUnitNormalsParallel(verts, faces, subfaces, subverts)
 ```
 
 ### 7)
@@ -77,6 +78,7 @@ The function
 
 ```
 smoothing(verts, faces, nbrLB, **kwargs)
+smoothingParallel(verts, faces, nbrLB, **kwargs)
 ```
 
 receives verts, faces and the neighborhood map (nbrLB). It changes the positions of verts along their normal vectors to maximize their dot product. The amount of change is determined by the weight function (mean curvature) in isotropic smoothing, and slightly complicated in the anisotropic smoothing.
@@ -90,7 +92,8 @@ Fraction of 0.1 is used to guarantee the quality of smoothing in the natural sur
 The weight function (curvatures) are calculated in every iteration using function 
 
 ```
-MeanGaussianPrincipalCurvatures(verts, nV, nbrLB, *args)
+MeanGaussianPrincipalCurvatures(verts, nV, nbrLB, *kwargs)
+MeanGaussianPrincipalCurvaturesParallel(verts, nV, nbrLB, *kwargs)
 ```
 
 Smoothing and calculation of curvature/weights are done by isotropic diffusion by default. If anisotropic method is required, keyword argument should be passed to the smoothing function. Smoothing function passes the argument to the curvature function.
@@ -103,7 +106,7 @@ The amount of change of verts from their originals is by default constrained to 
 
 ```
 # verts_constraint=1.4
-new_verts = smoothing(verts, faces, nbrLB, verts_constraint=1.4 )
+new_verts = smoothing(verts, faces, nbrLB, verts_constraint=1.4)
 ```
 
 Smoothing the points in space without a constraint will likely end up as a flat plane for a surface with boundaries. In a water-tight mesh (no boundary), for example in a sphere, the points may jump indefinitely. Smoothing function checks all the updated verts (vertices) with their original positions, if a vert has changed more than the constraint, it will be taken back to its original position. 
@@ -111,7 +114,7 @@ Smoothing the points in space without a constraint will likely end up as a flat 
 The other smoothing function
 
 ```
-smoothing_stdev(verts, faces, nbrLB, **kwargs)
+smoothingStdev(verts, faces, nbrLB, **kwargs)
 ```
 
 is the same as the regular one, with only one difference. Instead of maximizing the average of all dot products, it aims for the minimization of standard deviation of the mean curvatures of all vertices. The two functions lead to the same or very similar results.
@@ -120,17 +123,17 @@ I suggest the reader checks the code block below, and runs smoothing simpler geo
 
 ```
 ########### test smoothing a ball/torus ############
-smoothing_ball(5, 'aniso_diff') # smooths  a ball (r=5) by anisotropic diff.
-smoothing_ball(8)               # smooths by isotropic diff.
-smoothing_triple_torus()       # smooths triple torus by isotropic diff.
-smoothing_double_torus('aniso_diff') # smooths double torus by anisotropic diff.
-smoothing_double_torus()        # smooths double torus by isotropic diff.
+smoothingBall(5, 'aniso_diff') # smooths  a ball (r=5) by anisotropic diff.
+smoothingBall(8)               # smooths by isotropic diff.
+smoothingTripleTorus()       # smooths triple torus by isotropic diff.
+smoothingDoubleTorus('aniso_diff') # smooths double torus by anisotropic diff.
+smoothingDoubleTorus()        # smooths double torus by isotropic diff.
 ```
 ### 8)
 Parallel computation (multi-threading) has been used in a number of functions:
 
 ```
-verticesLaplaceBeltramiNeighborhood_parallel(faces, verts)
+verticesLaplaceBeltramiNeighborhoodParallel(faces, verts)
 # The two func. below are nested @ meshA_meshB_common_surface(vertsA, facesA, vertsB, facesB)
 maskA_advanced_parallel(vertsA, facesA, vertsB, facesB)
 intersectAB_maskA_advanced_parallel(vertsA, facesA, vertsB, facesB) 
@@ -143,12 +146,28 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
 # only 12 tasks are created 
 with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
 ```
+
+Computations of normal vectors, mean curvatures, smoothing weights ... is now parallelized. Since computation time for some operations would be in the order of o(m²) - m the number of data points - using parallelization would make some of the operations fast, for instance using 4 CPUs to smooth a large mesh could speed up the computation roughly 16 times; or using 6 CPUs would speed up roughly 36 times. The parallelized functions are memory-friendly too. They only split data into smaller chunks instead of creating copies of large data. In case there are large meshes (100000 or 1000000 triangles) in the 3D images, it pays off to run a single process with the maximum available CPU numbers instead of running two processes each with half the number of CPUs.
+Adjust the number of threads (CPU) and L2 cache memory of the CPUs in your computer. These parameters are outside main() function in the beginning of the code after importing libraries. The default values are 4 CPUs and 256 Kbyte memory for L2 cache.
+
+Function
+```
+arraySplitter(arr, **kwargs)
+```
+splits an array into smaller chunks. If the number of chunks is not given as kwarg, the function splits the array in chunks that fit L2 cache memory of CPU. Vertices (verts) and triangles (faces) can be split using this function. Splitting the neighborhood map array (nbrLB) requires a few more considerations. Therefore, function
+
+```
+nbrLBSplitter(nbrLB)
+```
+
+is developed separately in order to do this. A good example where arraySplitter and nbrLBSplitter have been used is the smoothingParallel function.
+
 ### 9)
 If the intention is estimation of contact angle of the fluid-fluid interface with the solid surface, isotropic and anisotropic methods can be implemented to smooth fluid-fluid interfaces and solid surfaces, respectively. Contact angle computation requires extraction of the three-phase contact line by functions
 
 ```
-meshA_meshB_meshC_common_line(vertsA, facesA, vertsB, facesB, vertsC, facesC)
-meshAB_meshC_common_line(nbrLB_AB, vertsAB, vertsC, facesC)
+meshA_meshB_meshC_commonLine(vertsA, facesA, vertsB, facesB, vertsC, facesC)
+meshAB_meshC_commonLine(nbrLB_AB, vertsAB, vertsC, facesC)
 ```
 The two functions are under development.
 
@@ -168,5 +187,5 @@ The main code is in the file curvatures_smoothing.py. All the written functions 
 #Young-Laplace #capillary #pressure 
 #X-ray #tomography #image #fluid #flow #porous #material
 #Helmholtz #free #energy #state #variable
-
+#parallel #concurrent #computation #python #python3
 ```
