@@ -1,4 +1,4 @@
-# Image processing
+# curvatures-smoothing-triangle-mesh
 
 ## Curvature computation & smoothing for triangular mesh data by isotropic/anisotropic diffusion 
 This program is for smoothing triangulated mesh surfaces by calculation of mean curvatures. Smoothing can be performed by either isotropic or anisotropic diffusion. The latter has heavier computation where Gaussian and principal curvatures are also calculated in addition to the mean curvatures. The anisotropic diffusion smoothing is capable of feature/noise recognition. The isotropic diffusion suits smoothing of for instance fluid-fluid interfaces (in two fluid flow) whereas the anisotropic one respects the natural roughness of a surface; and it suits smoothing of for instance solid surfaces with natural roughness. The meshes are smoothed using contangent discretization of the Laplace-Beltrami operator. For details of the smoothing method, check
