@@ -130,37 +130,35 @@ smoothingDoubleTorus('aniso_diff') # smooths double torus by anisotropic diff.
 smoothingDoubleTorus()        # smooths double torus by isotropic diff.
 ```
 ### 8)
-Parallel computation (multi-threading) has been used in a number of functions:
-
-```
-verticesLaplaceBeltramiNeighborhoodParallel(faces, verts)
-# The two func. below are nested @ meshA_meshB_common_surface(vertsA, facesA, vertsB, facesB)
-maskA_advanced_parallel(vertsA, facesA, vertsB, facesB)
-intersectAB_maskA_advanced_parallel(vertsA, facesA, vertsB, facesB) 
-```
-These functions are written to handle large mesh data by splitting them into smaller subsamples and running a sequential function simultaneously on several subsamples. ThreadPoolExecutor() module of concurrent.futures library has been utilized for this task. The tasks are created almost immediately and stored in a line on the memory. If the memory is limited or you wish to keep a part of the memory free for other purposes, use keyword "max_workers = n" to limit number of the created tasks to a maximum of "n". This could be helpful for instance when you are running the code for several sets of images simultaneously and need to limit the memory consumption of individual processes. For further reading about concurrent.futures [click here](https://docs.python.org/3/library/concurrent.futures.html). 
-
-```
-# up to 60 tasks are created almost immediately
-with concurrent.futures.ThreadPoolExecutor() as executor:
-# only 12 tasks are created 
-with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
-```
-
-Computations of normal vectors, mean curvatures, smoothing weights ... is now parallelized. Since computation time for some operations would be in the order of o(m²) - m the number of data points - using parallelization would make some of the operations fast, for instance using 4 CPUs to smooth a large mesh could speed up the computation roughly 16 times; or using 6 CPUs would speed up roughly 36 times. The parallelized functions are memory-friendly too. They only split data into smaller chunks instead of creating copies of large data. In case there are large meshes (100000 or 1000000 triangles) in the 3D images, it pays off to run a single process with the maximum available CPU numbers instead of running two processes each with half the number of CPUs.
-Adjust the number of threads (CPU) and L2 cache memory of the CPUs in your computer. These parameters are outside main() function in the beginning of the code after importing libraries. The default values are 4 CPUs and 256 Kbyte memory for L2 cache.
+Computations of normal vectors, mean curvatures, smoothing weights, and smoothing function itself is parallelized. Since computation time for some operations would be in higher orders than o(m) - m the number of data points - using parallelization would make some of the those operations extremely fast. The parallelized functions are memory-friendly too. They only split data into smaller chunks instead of creating copies of large data. In case there are large meshes (100,000 or 1,000,000 triangles) in the 3D images, it pays off to run a single process with the maximum available CPU numbers instead of running two processes each with half the number of CPUs.
+Adjust the number of threads (num_workers) and L2 cache memory of the CPUs (l2_cache). These global variables are accessible outside main() function in the beginning of the code after importing libraries. The default values are 4 CPUs and 256 Kbyte memory for L2 cache.
 
 Function
 ```
 arraySplitter(arr, **kwargs)
 ```
-splits an array into smaller chunks. If the number of chunks is not given as kwarg, the function splits the array in chunks that fit L2 cache memory of CPU. Vertices (verts) and triangles (faces) can be split using this function. Splitting the neighborhood map array (nbrLB) requires a few more considerations. Therefore, function
+quickly provides indexes of smaller chunks of an array for optimized computations. If the number of chunks is not given as kwarg, the function splits the array in chunks that fit L2 cache memory of CPU. Vertices (verts) and triangles (faces) can be split using this function. Splitting the neighborhood map array (nbrLB) requires a few more considerations. Therefore, function
 
 ```
 nbrLBSplitter(nbrLB)
 ```
 
-is developed separately in order to do this. A good example where arraySplitter and nbrLBSplitter have been used is the smoothingParallel function.
+is dedicated for this task. Examples where arraySplitter and nbrLBSplitter have been used can be found in the smoothingParallel and meanGaussianPrincipalCurvaturesParallel functions.
+
+ThreadPoolExecutor() module of concurrent.futures library has been utilized in parallelizations. The tasks are created almost immediately and stored in a line on the memory. For further reading about concurrent.futures [click here](https://docs.python.org/3/library/concurrent.futures.html). 
+
+Below the timing for smoothing two large meshes using sequential smoothing function and smoothingParallel function utilizing 4 processors are copied.
+
+```
+smoothing()
+number of verts (vertices) & faces (triangles) at mesh: 515335, 955763
+Smoothing (50 iterations) - sequential - in 212297 sec 
+
+smoothingParallel()
+number of verts (vertices) & faces (triangles) at mesh: 942184, 1673167
+Smoothing (50 iterations) - parallel, 4 CPUs - in 3092 sec
+```
+
 
 ### 9)
 If the intention is estimation of contact angle of the fluid-fluid interface with the solid surface, isotropic and anisotropic methods can be implemented to smooth fluid-fluid interfaces and solid surfaces, respectively. Contact angle computation requires extraction of the three-phase contact line by functions
