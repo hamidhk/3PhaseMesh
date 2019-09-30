@@ -32,7 +32,7 @@ num_workers = 4
 def main():
     # lists to store name, total interfacial area & average mean curvature of images
     img_lst, Awn_lst, Hwn_lst = [], [], [] 
-    path = '/media/Datas/sdb2/000-data/Schluter_wrr16_data/2-original-unzipped/md/'  # wrr2016 - MD
+    path = '/media/Datas/sdb2/000-data/Schluter_wrr16_data/2-original-unzipped/test/'  # wrr2016 - MD
     entries = listdir(path)
     for entry in entries:
         if entry.endswith('.mhd'):
@@ -58,26 +58,26 @@ def main():
             # returns which wetting and nonwetting blobs are neighbors
             print('finding neighbor blobs of vol. A & vol. B, eg. wetting & nonwetting neighbor blobs:')
             
-            nbr_blobs = labeledVolSetA_labeledVolSetB_neighborBlobs(lbld_W, lbld_N)
+#            nbr_blobs = labeledVolSetA_labeledVolSetB_neighborBlobs(lbld_W, lbld_N)
 
-            # # ################################# testing ###################################
-            # blb_W = np.where(lbld_W == 3, lbld_W, 0) # wetting (W) blob
-            # blb_N = np.where(lbld_N == 1, lbld_N, 0) # nonwetting (N) blob
-            # vertsW, facesW, normsW, valsW = measure.marching_cubes_lewiner(blb_W)
-            # vertsN, facesN, normsN, valsN = measure.marching_cubes_lewiner(blb_N)
-            # print('num. verts & faces in wetting mesh:', len(vertsW), len(facesW))
-            # print('num. verts & faces in nonwetting mesh: ', len(vertsN), len(facesN), '\n')
-            # print('extracting the interface...')         
-            # vertsWN, facesWN = meshA_meshB_commonSurface(vertsW, facesW, vertsN, facesN)
-            # if 1 == 1:
-            #     print('num. verts & faces @ interface mesh: ', len(vertsWN), len(facesWN), '\n')
-            #     nbr1 = verticesLaplaceBeltramiNeighborhoodParallel(facesWN, vertsWN)
-            #     vertsWN2 = smoothingParallel(vertsWN, facesWN, nbr1, verts_constraint=1.7)
-            #     mlab.figure(figure='smoothing', bgcolor=(0.95,0.95,0.95), size=(1000, 800))
-            #     notsmooth = mlab.triangular_mesh(vertsWN[:,0], vertsWN[:,1], vertsWN[:,2], facesWN, representation='wireframe', color=(0,0,1))
-            #     smooth  = mlab.triangular_mesh(vertsWN2[:,0], vertsWN2[:,1], vertsWN2[:,2], facesWN, color=(1,0,0)) 
-            #     mlab.show()
-            # # #############################################################################
+            # ################################# testing ###################################
+            blb_W = np.where(lbld_W == 502, lbld_W, 0) # wetting (W) blob
+            blb_N = np.where(lbld_N == 1, lbld_N, 0) # nonwetting (N) blob
+            vertsW, facesW, normsW, valsW = measure.marching_cubes_lewiner(blb_W)
+            vertsN, facesN, normsN, valsN = measure.marching_cubes_lewiner(blb_N)
+            print('num. verts & faces in wetting mesh:', len(vertsW), len(facesW))
+            print('num. verts & faces in nonwetting mesh: ', len(vertsN), len(facesN), '\n')
+            print('extracting the interface...')         
+            vertsWN, facesWN = meshA_meshB_commonSurface(vertsW, facesW, vertsN, facesN)
+            if 1 == 1:
+                print('num. verts & faces @ interface mesh: ', len(vertsWN), len(facesWN), '\n')
+                nbr1 = verticesLaplaceBeltramiNeighborhoodParallel(facesWN, vertsWN)
+                vertsWN2 = smoothingParallel(vertsWN, facesWN, nbr1, verts_constraint=1.7)
+                mlab.figure(figure='smoothing', bgcolor=(0.95,0.95,0.95), size=(1000, 800))
+                notsmooth = mlab.triangular_mesh(vertsWN[:,0], vertsWN[:,1], vertsWN[:,2], facesWN, representation='wireframe', color=(0,0,1))
+                smooth  = mlab.triangular_mesh(vertsWN2[:,0], vertsWN2[:,1], vertsWN2[:,2], facesWN, color=(1,0,0)) 
+                mlab.show()
+            # #############################################################################
 
             Awn_all, kHwn_all = [], [] # lists to store areas and mean curvatures for an image
             for item in nbr_blobs:
@@ -692,6 +692,7 @@ def meshA_meshB_commonSurface(vertsA, facesA, vertsB, facesB):
                     zz = zz[zz!=j]
                     e4 = edgeAB[edgeAB[:,0]==zz]
                     e5 = edgeAB[edgeAB[:,1]==zz]
+                    tt = []
                     if len(e4)==1 and len(e5)==1:
                         tt = np.unique(np.concatenate((e4,e5)))
                     elif len(e4)==0 and len(e5)==2:
