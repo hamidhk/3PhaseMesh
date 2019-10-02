@@ -705,9 +705,12 @@ def meshA_meshB_commonSurface(vertsA, facesA, vertsB, facesB):
                         facesAB = np.concatenate((facesAB, fc))
                         # new face (fc) added, now deleting edges of fc from edgeAB
                         edgeAB = edgeAB.tolist()
-                        edgeAB.remove([fc[0][0], fc[0][1]])
-                        edgeAB.remove([fc[0][1], fc[0][2]])
-                        edgeAB.remove([fc[0][0], fc[0][2]])
+                        if [fc[0][0], fc[0][1]] in edgeAB:
+                            edgeAB.remove([fc[0][0], fc[0][1]])
+                        if [fc[0][1], fc[0][2]] in edgeAB:
+                            edgeAB.remove([fc[0][1], fc[0][2]])
+                        if [fc[0][0], fc[0][2]] in edgeAB:
+                            edgeAB.remove([fc[0][0], fc[0][2]])
                         edgeAB = np.array(edgeAB)
                         break
             del qq
