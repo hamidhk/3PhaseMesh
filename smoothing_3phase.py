@@ -11,7 +11,7 @@ from time import time   # used to measure runtime of certain functions
 from stl import mesh    # used only to save stl files
 import pickle           # used to save a part of results
 import matplotlib.pyplot as plt # used to create/save histogram
-
+import seaborn as sbn
 
 ################################################################
 ################ ADJUST GLOBAL VARIABLES BELOW #################
@@ -101,15 +101,19 @@ def main():
             # # construct/save histogram of contact angles
             t = time()
             ang = ang[labc[:,2]==-4] # ang array only on 3-phase common line
-            count, bins = np.histogram(ang, bins=10)
-            count_ = count/len(ang)
-            # fig = plt.bar(bins[:-1]+0.5*(bins[1]-bins[0]), count_)
-            fig0 = plt.hist(bins[:-1], bins, weights=count_, histtype='step')
-            # fig0 = plt.hist(bins[:-1], bins, weights=count_, histtype='stepfilled') # filled bars
-            plt.xlabel('Contact angle (deg)')
+            # count, bins = np.histogram(ang, bins=10)
+            # count_ = count/len(ang)
+            # fig0 = plt.hist(bins[:-1], bins, weights=count_, histtype='step')
+            # # fig = plt.bar(bins[:-1]+0.5*(bins[1]-bins[0]), count_)
+            # # fig0 = plt.hist(bins[:-1], bins, weights=count_, histtype='stepfilled') # filled bars
+            # fig1 = plt.plot(bins[:-1]+0.5*(bins[1]-bins[0]), count_, lw=1)
+            fig, ax = plt.subplots()
+            # sbn.set(color_codes=True)
+            fig_ = sbn.distplot(ang, bins=10)
+            plt.xlabel('Contact angle (Deg)')
             plt.ylabel('Relative frequency')
             plt.title('Contact angle histogram')
-            fig1 = plt.plot(bins[:-1]+0.5*(bins[1]-bins[0]), count_, lw=1)
+            ax.grid(linestyle=':', linewidth=0.5)
             plt.savefig(filename + "_hist.png")
             # plt.show()
             print(f'Histogram of contact angles are created/saved in {round(time()-t,4)} sec!')
@@ -222,6 +226,7 @@ def main():
             # print('{0:5.3f} {1:5.3f}'.format(timeit(wrappedA, number=1),\
             #         timeit(wrappedB, number=1)))
             #####################################################
+
 
 def ThreePhaseIntersection(img, **kwargs):
     print('This function finds two & three phase intersections! creates triangular meshes!')
