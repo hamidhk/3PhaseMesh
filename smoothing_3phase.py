@@ -1,7 +1,7 @@
    
-print('\nThis code is written in Python 3.7 installed using Conda package manager!')
+print('\nThis code is written in Python 3.7 installed using Conda package manager!', flush=True)
 from sys import version
-print('python version in your system is', version)
+print('python version in your system is', version, flush=True)
 from os import listdir  # used to go through multiple 3D image files in a folder
 from skimage import io  # used to read '.raw'/'.mhd' image into numpy array
 import numpy as np      # used for computations
@@ -11,13 +11,13 @@ from time import time   # used to measure runtime of certain functions
 from stl import mesh    # used only to save stl files
 import pickle           # used to save a part of results
 import matplotlib.pyplot as plt # used to create/save histogram
-import seaborn as sbn
+import seaborn as sbn   # used to create/save histogram
 
 ################################################################
 ################ ADJUST GLOBAL VARIABLES BELOW #################
 ################################################################
 ## path of the folder containing segmented 3-phase images
-path = '/home/user/folder/'
+path = '/home/hamidh/py/'
 ## values for each phase in segmented image
 ## image must contain 3 phases
 # wetting phase (A), nonwetting phase (B), solid (S)
@@ -29,7 +29,7 @@ Aval, Bval, Sval = 1, 0, 2
 def main():
     for filename in listdir(path):
         if filename.endswith('.mhd'):
-            print('\n\nReading image', filename, 'as a numpy array')
+            print('\n\nReading image', filename, 'as a numpy array', flush=True)
             # open .raw image  as np.array (z,y,x) using simpleitk plugin of skimage
             img = io.imread(path + filename, plugin='simpleitk')
             # img = io.imread(path + filename) # tif image
@@ -37,8 +37,8 @@ def main():
             # io.show()
             # # # # Resclice image to a smaller volume! # # # #
             # img=img[150:250, 150:250, 150:250] # small test volume
-            print('Image size & dimensions:', img.size, img.shape, '\n')
-            print(f'Image has {np.sum(img == Bval)} phase B (nonwetting), {np.sum(img == Aval)} phase A (wetting) voxels.')
+            print('Image size & dimensions:', img.size, img.shape, '\n', flush=True)
+            print(f'Image has {np.sum(img == Bval)} phase B (nonwetting), {np.sum(img == Aval)} phase A (wetting) voxels.', flush=True)
 
             ###################################################################
             ## find 2 & 3 phase intersections, create mesh & data structure for 3-phase smoothing
@@ -82,7 +82,7 @@ def main():
             interface = ls_
             interface.insert(0, 'labelPhaseA, labelPhaseB, meanCurv(1/pixel), Area(pixel**2), meanAngle(deg), indicesOfABVertices, indicesOfABFaces')
             interf = interf[interf[:,0]!=0]
-            print(f'\nInterfacial curvature, area, contact angles & unit normal vectors calculated in {round(time()-t, 4)}!')
+            print(f'\nInterfacial curvature, area, contact angles & unit normal vectors calculated in {round(time()-t, 4)}!', flush=True)
             
             ###################################################################
             ########################### save arrays ###########################
@@ -95,7 +95,7 @@ def main():
             with open(filename + '_interface_summary', 'wb') as fp:   # interface (label, verts_index, finals)
                 pickle.dump(interface, fp)
             ## save interface - not an array - use pickle!
-            print(f'Output arrays/list saved in {round(time()-t,4)} sec!')       
+            print(f'Output arrays/list saved in {round(time()-t,4)} sec!', flush=True)       
             
             ###################################################################
             # # construct/save histogram of contact angles
@@ -116,12 +116,12 @@ def main():
             ax.grid(linestyle=':', linewidth=0.5)
             plt.savefig(filename + "_hist.png")
             # plt.show()
-            print(f'Histogram of contact angles are created/saved in {round(time()-t,4)} sec!')
+            print(f'Histogram of contact angles are created/saved in {round(time()-t,4)} sec!', flush=True)
     
             ###################################################################
             # # print a summary!
-            print('\n\n######################      Summary for fluid-fluid interfaces      ########################')
-            print('\nInterface, labelPhaseA, labelPhaseB, meanCurv(1/pixel), Area(pixel**2), meanContactAngle(deg), num_verts, num_faces')
+            print('\n\n######################      Summary for fluid-fluid interfaces      ########################', flush=True)
+            print('\nInterface, labelPhaseA, labelPhaseB, meanCurv(1/pixel), Area(pixel**2), meanContactAngle(deg), num_verts, num_faces', flush=True)
             for i, x in enumerate(interface[1::]):
                 print(f'{i}             {x[0]},           {x[1]},         {round(x[2],5)},         {round(x[3],1)},         {round(x[4],1)},                  {len(x[5])},         {len(x[6])}')
     
@@ -160,7 +160,7 @@ def main():
                 for j in range(3):
                     obj.vectors[i][j] = verts[f[j],:]
             obj.save(filename + '_init_s.stl') # write into file        
-            print(f'\nCreated/saved initial & final fluid-fluid mesh stl in {round(time()-t,4)} sec!')
+            print(f'\nCreated/saved initial & final fluid-fluid mesh stl in {round(time()-t,4)} sec!', flush=True)
 
             t=time()
             obj = mesh.Mesh(np.zeros(facesi.shape[0], dtype=mesh.Mesh.dtype))
@@ -174,7 +174,7 @@ def main():
                 for j in range(3):
                     obj.vectors[i][j] = verts_[f[j],:]
             obj.save(filename + '_final_s.stl') # write into file        
-            print(f'Created/saved initial & final solid-fluid mesh stl in {round(time()-t,4)} sec!\n')
+            print(f'Created/saved initial & final solid-fluid mesh stl in {round(time()-t,4)} sec!\n', flush=True)
 
             ##################################################################
             # # visualize sign of kHi
@@ -229,9 +229,9 @@ def main():
 
 
 def ThreePhaseIntersection(img, **kwargs):
-    print('This function finds two & three phase intersections! creates triangular meshes!')
-    print('Corrects non-orientable vertices on mesh!')
-    print('Creates structure info for mesh smoothing!')
+    print('This function finds two & three phase intersections! creates triangular meshes!', flush=True)
+    print('Corrects non-orientable vertices on mesh!', flush=True)
+    print('Creates structure info for mesh smoothing!', flush=True)
     smoothing_struct = kwargs.get('return_smoothing_structures')
 
     def intersectAlongAllAxes_slower_but_needs_less_memory():
@@ -695,13 +695,13 @@ def ThreePhaseIntersection(img, **kwargs):
     lB, num_B = ndimage.measurements.label(_B, structure=s)
     lS, num_S = ndimage.measurements.label(_S, structure=s)
     lS_not = lA + lB
-    print(num_A, 'isolated A (wetting) blob(s)')
-    print(num_B, 'isolated B (nonwetting) blob(s)')
-    print(num_S, 'isolated S (solid) blob(s)')
+    print(num_A, 'isolated A (wetting) blob(s)', flush=True)
+    print(num_B, 'isolated B (nonwetting) blob(s)', flush=True)
+    print(num_S, 'isolated S (solid) blob(s)', flush=True)
     if 0 in (num_A, num_B, num_S):
-        return print('Error: Image has less than 3 phases!\n')
+        return print('Error: Image has less than 3 phases!\n', flush=True)
         
-    print(f'\nLabel all three phases in {round(time()-t0,4)} sec!')
+    print(f'\nLabel all three phases in {round(time()-t0,4)} sec!', flush=True)
     
     #################################################
     ### create 3D gird (3 time the size of lA)
@@ -726,14 +726,14 @@ def ThreePhaseIntersection(img, **kwargs):
     labc_ce = np.concatenate((lab_ces, lab_cei)) # labels @ ce
     labc_co =  np.concatenate((lab_cos, lab_coi)) # labels @ co
     del ces, cei, ns, ni, cos, coi, cos_, coi_, co_1, lab_cei, lab_coi, lab_cos, lab_ces
-    print(f'Find intersections & collect required info in {round(time()-t,4)} sec!')
+    print(f'Find intersections & collect required info in {round(time()-t,4)} sec!', flush=True)
     
     #################################################  
     ### find unique indexes for verts (just for co; all ce are unique)
     t=time()
     # idx is indices of co in unq, idx_ is indices of unq in co (1st occurrence)
     unq, idx_, idx, cnt = np.unique(co, axis=0, return_index=True, return_inverse=True, return_counts=True)
-    print(f'Find unique indexes for vertices in  {round(time()-t,4)} sec!') # about 85 sec (nlogn)
+    print(f'Find unique indexes for vertices in  {round(time()-t,4)} sec!', flush=True) # about 85 sec (nlogn)
     
     #################################################
     ### duplicate co's which are @ multiple intersections (interfaces); find/correct nonorientable co etc
@@ -873,7 +873,7 @@ def ThreePhaseIntersection(img, **kwargs):
     labc_unq = np.concatenate((labc_unq, np.array(labc_unq_)))
     cnt = np.concatenate((cnt, np.array(cnt_)))
     del unq_, labc_unq_, cnt_
-    print(f'\nCorrect mesh orientation/labels issues in {round(time()-t,4)} sec!')
+    print(f'\nCorrect mesh orientation/labels issues in {round(time()-t,4)} sec!', flush=True)
     
     #################################################
     ### merge verts & labels (centers & unique_corners)
@@ -908,7 +908,7 @@ def ThreePhaseIntersection(img, **kwargs):
     facess =faces[faces[:,1]<lces] 
     facesi =faces[faces[:,1]>=lces]
     del faces, fc, nc, dp, no
-    print(f'Create faces (triangles) in {round(time()-t, 4)} sec!')
+    print(f'Create faces (triangles) in {round(time()-t, 4)} sec!', flush=True)
     
     #################################################
     if smoothing_struct==True:
@@ -916,7 +916,7 @@ def ThreePhaseIntersection(img, **kwargs):
         ############# CREATE STRUCTURES NEEDED FOR MESH SMOOTHING ############
         ######################################################################
         #########  structures #1 (nbrs, nbri) required for smoothing #########
-        print('\nCreate structures required for mesh smoothing!')
+        print('\nCreate structures required for mesh smoothing!', flush=True)
         # nbrs (for solid mesh) & nbri (for AB interface mesh)
         # are  np.array with 4 columns, where
         # col 0, 1 are all (i,j) & (j,i) vertices making an edge,
@@ -992,7 +992,7 @@ def ThreePhaseIntersection(img, **kwargs):
         nbri = nbri[nbri[:,0].argsort()] # this sorting is necessary @smoothingParallel
 
         del ce__, co__, co___, co__unq,  co__idx_, co__cnt, ind, ce0, ce0i, co__1, co__2, co__3, co__3i
-        print(f'1) Laplace-Beltrami structures, nbrs & nbri, created in {round(time()-t, 4)} sec!')
+        print(f'1) Laplace-Beltrami structures, nbrs & nbri, created in {round(time()-t, 4)} sec!', flush=True)
         
         ######################################################################
         ########  structures #2 (nbrfcs, nbrfci) required for smoothing ########  
@@ -1059,7 +1059,7 @@ def ThreePhaseIntersection(img, **kwargs):
         msk_nbrfcs = np.zeros(shape=(nbrfcs.shape[0], nbrfcs.shape[1]-1), dtype=np.bool)
         msk_nbrfci[nbrfci[:,1::]!=-1] = True
         msk_nbrfcs[nbrfcs[:,1::]!=-1] = True
-        print(f'2) nbrfcs & nbrfci structures - faces around vertices - & corresponding boolean masks created in {round(time()-t, 4)} sec!')
+        print(f'2) nbrfcs & nbrfci structures - faces around vertices - & corresponding boolean masks created in {round(time()-t, 4)} sec!', flush=True)
         
         ######################################################################
         ####### structre#3 (msk_nbrs, msk_nbri) required for smoothing #######
@@ -1087,7 +1087,7 @@ def ThreePhaseIntersection(img, **kwargs):
         msk_nbri[ind_nbri!=-1] = True
 
         del x_, ind, cnt
-        print(f'3) Indexing/masking structures for nbri & nbrs - created in {round(time()-t, 4)} sec!')
+        print(f'3) Indexing/masking structures for nbri & nbrs - created in {round(time()-t, 4)} sec!', flush=True)
 
         #########################################################################
         ############  structre#4 (interface) required for smoothing #############  
@@ -1123,7 +1123,7 @@ def ThreePhaseIntersection(img, **kwargs):
             # x_[q[2]:q[3], 2 ] is indices of labc or verts which have q[0],q[1] as their labels - only for fluid-fluid mesh (AB)
             # xf_[qf[2]:q[f3], 2 ] is the same as above for facesi
         del x_, x_unq, xf_unq, labcf_, idxf, cntf
-        print(f'4) Interface structure - intersection of blobs in phase A with blobs in phase B - created in {round(time()-t, 4)} sec!')
+        print(f'4) Interface structure - intersection of blobs in phase A with blobs in phase B - created in {round(time()-t, 4)} sec!', flush=True)
         
         ##################################################################
         result = verts, facesi, facess, labc, nbrfci, nbrfcs, msk_nbrfci, msk_nbrfcs,\
@@ -1154,10 +1154,10 @@ def ThreePhaseIntersection(img, **kwargs):
     # mlab.show()
     ##################################################################
 
-    print(f'\nTotal runtime for intersection func. {round(time()-t0,4)} sec!')
-    print(f'\n{len(facesi)} triangles @ AB (fluid-fluid) & {len(facess)} @ S-AB (solid-fluid) interfaial meshes!')
-    print(f'{len(verts)} vertices, with {len(labc[labc[:,2]==-4])} @ 3-phase contact line!')
-    print(f'Returning {len(result)} arrays!\n')
+    print(f'\nTotal runtime for intersection func. {round(time()-t0,4)} sec!', flush=True)
+    print(f'\n{len(facesi)} triangles @ AB (fluid-fluid) & {len(facess)} @ S-AB (solid-fluid) interfaial meshes!', flush=True)
+    print(f'{len(verts)} vertices, with {len(labc[labc[:,2]==-4])} @ 3-phase contact line!', flush=True)
+    print(f'Returning {len(result)} arrays!\n', flush=True)
     return result
 
 
@@ -1450,9 +1450,9 @@ def smoothingThreePhase(verts,facesi, facess, nbrfci, nbrfcs, msk_nbrfci, msk_nb
     s_, ab_ = 0.15, 0.3     # tuning parameters for solid-fluid and fluid-fluid meshes
     final_countdown = 0
     
-    print('\n##############   Smoothing progress  ###############\n')
-    print('step #', 1*' ', 'ave_dotprod_S', 4*' ', 'sum(std(kH_AB))', '  sum((pnt-pnt0)**2)', 1*' ', 'max_tri_Ar', 1*' ','tune_S', 1*' ', 'tune_AB')
-    print('0', 8*' ', round(dotp[0],7), 9*' ', '--------', 8*' ', round(dist[0],1), 13*' ', round(maxa[0],4), 5*' ',s_, 2*' ',ab_)
+    print('\n##############   Smoothing progress  ###############\n', flush=True)
+    print('step #', 1*' ', 'ave_dotprod_S', 4*' ', 'sum(std(kH_AB))', '  sum((pnt-pnt0)**2)', 1*' ', 'max_tri_Ar', 1*' ','tune_S', 1*' ', 'tune_AB', flush=True)
+    print('0', 8*' ', round(dotp[0],7), 9*' ', '--------', 8*' ', round(dist[0],1), 13*' ', round(maxa[0],4), 5*' ',s_, 2*' ',ab_, flush=True)
     
     while condition:    # smoothing loop
         # verts tuned by moving along their unit normals
@@ -1530,7 +1530,7 @@ def smoothingThreePhase(verts,facesi, facess, nbrfci, nbrfcs, msk_nbrfci, msk_nb
                 condition = False
         
         print(mm, 8*' ', round(dotp[mm],7), 7*' ', round(stdkHi[mm],7), 7*' ', \
-            round(dist[mm],3), 10*' ', round(maxa[mm],4), 5*' ', round(s_,4), 2*' ', round(ab_,4))
+            round(dist[mm],3), 10*' ', round(maxa[mm],4), 5*' ', round(s_,4), 2*' ', round(ab_,4), flush=True)
 
         if  mm >= nn or condition == False:
             # checks to stop iter. @ step 100 & all iter. steps after 
@@ -1544,11 +1544,11 @@ def smoothingThreePhase(verts,facesi, facess, nbrfci, nbrfcs, msk_nbrfci, msk_nb
                 verts = VV[ki_-1]
                 VV[ki_-1] = -1
                 condition = False
-                print(f'\nave. dot prod. of all neighbor unit normals on solid-fluid mesh is max at iteration {ks_}')
-                print(f'ave_dotprods for smooth solid-fluid mesh is {round(dotp[ks_],6)}')
-                print(f'\ndiff. mean curvature @ points with interfacial mean curv. for fluid-fluid mesh is min at iteration {ki_-1}')
-                print(f'sum(std(kHi)) for smooth fluid-fluid mesh is {round(stdkHi[ki_],6)} at iteration {ki_-1}')
-                print(f'ave_dotprods for smooth solid-fluid mesh when fluid-fluid is smoothest, is {round(dotp[ki_-1],6)} at iteration {ki_-1}')
+                print(f'\nave. dot prod. of all neighbor unit normals on solid-fluid mesh is max at iteration {ks_}', flush=True)
+                print(f'ave_dotprods for smooth solid-fluid mesh is {round(dotp[ks_],6)}', flush=True)
+                print(f'\ndiff. mean curvature @ points with interfacial mean curv. for fluid-fluid mesh is min at iteration {ki_-1}', flush=True)
+                print(f'sum(std(kHi)) for smooth fluid-fluid mesh is {round(stdkHi[ki_],6)} at iteration {ki_-1}', flush=True)
+                print(f'ave_dotprods for smooth solid-fluid mesh when fluid-fluid is smoothest, is {round(dotp[ki_-1],6)} at iteration {ki_-1}', flush=True)
 
             if ki_ == mm: # or ks_ == mm:
                 # smoothing may still improve, so itereation should not stop
@@ -1557,7 +1557,7 @@ def smoothingThreePhase(verts,facesi, facess, nbrfci, nbrfcs, msk_nbrfci, msk_nb
                 # only last two element are needed for further iteration
         mm += 1
     del VV, dotp, dist, maxa
-    print(f'\nsmoothing runtime in {mm-1} iterations is {round(time()-t,4)} sec!\n')
+    print(f'\nsmoothing runtime in {mm-1} iterations is {round(time()-t,4)} sec!\n', flush=True)
     return verts # smoothed verts
 
 
