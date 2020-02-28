@@ -17,7 +17,7 @@ import seaborn as sbn   # used to create/save histogram
 ################ ADJUST GLOBAL VARIABLES BELOW #################
 ################################################################
 ## path of the folder containing segmented 3-phase images
-path = '/home/hamidh/py/'
+path = '/home/user/folder/'
 ## values for each phase in segmented image
 ## image must contain 3 phases
 # wetting phase (A), nonwetting phase (B), solid (S)
@@ -37,7 +37,7 @@ def main():
             # io.show()
             # # # # Resclice image to a smaller volume! # # # #
             # img=img[150:250, 150:250, 150:250] # small test volume
-            print('Image size & dimensions:', img.size, img.shape, '\n', flush=True)
+            # print('Image size & dimensions:', img.size, img.shape, '\n', flush=True)
             print(f'Image has {np.sum(img == Bval)} phase B (nonwetting), {np.sum(img == Aval)} phase A (wetting) voxels.', flush=True)
 
             ###################################################################
@@ -54,15 +54,16 @@ def main():
             ## 3-phase mesh smoothing
             verts_ = smoothingThreePhase(verts, facesi, facess, nbrfci, nbrfcs, msk_nbrfci, \
                 msk_nbrfcs, nbri, nbrs, ind_nbri, ind_nbrs, msk_nbri, msk_nbrs, interface, verts_constraint=1.7) #, method='aniso_diff')
- 
             ###################################################################
             ## calc. interfacial area, curvature, contact angle after smoothing
             t = time()
             nVi = verticesUnitNormals(verts_, facesi, nbrfci, msk_nbrfci)
-            kHi, Avor, maxa = meanGaussianPrincipalCurvatures(verts_, nVi, nbrfci, nbri, ind_nbri, msk_nbri)
+            kHi, Avor, maxa = meanGaussianPrincipalCurvatures(verts_, nVi, nbri, ind_nbri, msk_nbri)
             kH_, std, kHi_ = integralMeanCurvature(kHi, Avor, interface)
             nVs = verticesUnitNormals(verts_, facess, nbrfcs, msk_nbrfcs)
             ang = (180/np.pi)*np.arccos(nVi[:,0]*nVs[:,0] + nVi[:,1]*nVs[:,1] + nVi[:,2]*nVs[:,2])
+            
+            del nbrfci, nbrfcs, msk_nbrfci, msk_nbrfcs, ind_nbri, ind_nbrs, msk_nbri, msk_nbrs
             
             # # add mean curvature, interfacial area, mean contact angle to interface list
             # # & remove interfaces with less than 25 vertices (small interfaces, too uncertain)
@@ -148,33 +149,34 @@ def main():
             ################## create/save mesh stl file ######################
             # # create/save two mesh stl files; for AB interface & solid  meshes
             # #  - UNCOMMENT BELOW - # #
-            t=time()
-            obj = mesh.Mesh(np.zeros(facesi.shape[0], dtype=mesh.Mesh.dtype))
-            for i, f in enumerate(facesi):
-                for j in range(3):
-                    obj.vectors[i][j] = verts[f[j],:]
-            obj.save(filename + '_init_i.stl') # write into file
-            # solid stl file
-            obj = mesh.Mesh(np.zeros(facess.shape[0], dtype=mesh.Mesh.dtype))
-            for i, f in enumerate(facess):
-                for j in range(3):
-                    obj.vectors[i][j] = verts[f[j],:]
-            obj.save(filename + '_init_s.stl') # write into file        
-            print(f'\nCreated/saved initial & final fluid-fluid mesh stl in {round(time()-t,4)} sec!', flush=True)
+            # t=time()
+            # obj = mesh.Mesh(np.zeros(facesi.shape[0], dtype=mesh.Mesh.dtype))
+            # for i, f in enumerate(facesi):
+            #     for j in range(3):
+            #         obj.vectors[i][j] = verts[f[j],:]
+            # obj.save(filename + '_init_i.stl') # write into file
+            # # solid stl file
+            # obj = mesh.Mesh(np.zeros(facess.shape[0], dtype=mesh.Mesh.dtype))
+            # for i, f in enumerate(facess):
+            #     for j in range(3):
+            #         obj.vectors[i][j] = verts[f[j],:]
+            # obj.save(filename + '_init_s.stl') # write into file        
+            # print(f'\nCreated/saved initial & final fluid-fluid mesh stl in {round(time()-t,4)} sec!', flush=True)
 
-            t=time()
-            obj = mesh.Mesh(np.zeros(facesi.shape[0], dtype=mesh.Mesh.dtype))
-            for i, f in enumerate(facesi):
-                for j in range(3):
-                    obj.vectors[i][j] = verts_[f[j],:]
-            obj.save(filename + '_final_i.stl') # write into file
-            # solid stl file
-            obj = mesh.Mesh(np.zeros(facess.shape[0], dtype=mesh.Mesh.dtype))
-            for i, f in enumerate(facess):
-                for j in range(3):
-                    obj.vectors[i][j] = verts_[f[j],:]
-            obj.save(filename + '_final_s.stl') # write into file        
-            print(f'Created/saved initial & final solid-fluid mesh stl in {round(time()-t,4)} sec!\n', flush=True)
+            # t=time()
+            # obj = mesh.Mesh(np.zeros(facesi.shape[0], dtype=mesh.Mesh.dtype))
+            # for i, f in enumerate(facesi):
+            #     for j in range(3):
+            #         obj.vectors[i][j] = verts_[f[j],:]
+            # obj.save(filename + '_final_i.stl') # write into file
+            # # solid stl file
+            # obj = mesh.Mesh(np.zeros(facess.shape[0], dtype=mesh.Mesh.dtype))
+            # for i, f in enumerate(facess):
+            #     for j in range(3):
+            #         obj.vectors[i][j] = verts_[f[j],:]
+            # obj.save(filename + '_final_s.stl') # write into file
+            # del  obj 
+            # print(f'Created/saved initial & final solid-fluid mesh stl in {round(time()-t,4)} sec!\n', flush=True)
 
             ##################################################################
             # # visualize sign of kHi
@@ -226,6 +228,8 @@ def main():
             # print('{0:5.3f} {1:5.3f}'.format(timeit(wrappedA, number=1),\
             #         timeit(wrappedB, number=1)))
             #####################################################
+            del verts, labc, facesi, facess, verts_, nVi, nVs, nbri, nbrs, \
+                ang, kHi, interf, interface, ls_, Avor, maxa, kH_, std, kHi_
 
 
 def ThreePhaseIntersection(img, **kwargs):
@@ -701,7 +705,7 @@ def ThreePhaseIntersection(img, **kwargs):
     if 0 in (num_A, num_B, num_S):
         return print('Error: Image has less than 3 phases!\n', flush=True)
         
-    print(f'\nLabel all three phases in {round(time()-t0,4)} sec!', flush=True)
+    print(f'\nLabel individual blobs of all three phases in {round(time()-t0,4)} sec!', flush=True)
     
     #################################################
     ### create 3D gird (3 time the size of lA)
@@ -1075,11 +1079,11 @@ def ThreePhaseIntersection(img, **kwargs):
             ind_nbrs[i,0:x_[i,0]] = np.arange(x_[i,1],x_[i,2],1)
         msk_nbrs = np.zeros(shape=ind_nbrs.shape, dtype=np.bool)
         msk_nbrs[ind_nbrs!=-1] = True
+        
         # interface (AB) mesh
         x_, ind, cnt = np.unique(nbri[:,0], return_index=True, return_counts=True)
         siz = np.max(cnt)
         x_ = np.vstack((cnt, ind, ind + cnt)).T
-
         ind_nbri = - np.ones(shape=(len(x_),siz), dtype=facesi.dtype)
         for i in range(len(ind_nbri)):
             ind_nbri[i,0:x_[i,0]] = np.arange(x_[i,1],x_[i,2],1)
@@ -1214,7 +1218,7 @@ def averageAllDotProducts(nbr, nV):
     return np.average(n) # np.sum(n)/len(n)
 
 
-def meanGaussianPrincipalCurvatures(verts, nV, nbrfc, nbr, ind_nbr, msk_nbr, **kwargs):
+def meanGaussianPrincipalCurvatures(verts, nV, nbr, ind_nbr, msk_nbr, **kwargs):
     ## verts (vertices), nV (unit normal vectors at verts)
     # nbr (neighborhood map)
     # ind_nbr, msk_nbr are indexing and masking structures for nbr
@@ -1335,10 +1339,10 @@ def meanGaussianPrincipalCurvatures(verts, nV, nbrfc, nbr, ind_nbr, msk_nbr, **k
     kk = np.sum(kk, axis=1)
     Amxd = np.zeros(len(verts), dtype=verts.dtype)
     kH = np.zeros(len(verts), dtype=verts.dtype)
-    kH[nbrfc[:,0]] = 0.25*kk/Ava # Ava[Ava==0] = 2.2250738585072014e-308 # to prevent devision-by-zero error
-    Amxd[nbrfc[:,0]] = Ava
-
-    # wieght func. (wf) for anisotropic diffusion
+    kH[nbr[:,0][ind_nbr[:,0]]] = 0.25*kk/Ava # Ava[Ava==0] = 2.2250738585072014e-308 # to prevent devision-by-zero error
+    Amxd[nbr[:,0][ind_nbr[:,0]]] = Ava
+    
+    # Gaussian & principal curvatures, wieght func. (wf) for anisotropic diffusion smoothing
     if method == 'aniso_diff':
         # kH[kH==0] = 2.2250738585072014e-308  # to prevent devision-by-zero error
         # Gaussian curvature (kG)
@@ -1351,7 +1355,7 @@ def meanGaussianPrincipalCurvatures(verts, nV, nbrfc, nbr, ind_nbr, msk_nbr, **k
         ta[msk_nbr==False] = 0
         ta = np.sum(ta, axis=1)
         kG = np.zeros(len(verts), dtype=verts.dtype)
-        kG[nbrfc[:,0]] = (2*np.pi - ta)/Ava
+        kG[nbr[:,0][ind_nbr[:,0]]] = (2*np.pi - ta)/Ava
 
         # principal curvatures (k1, k2)
         dlta = kH**2 - kG
@@ -1468,16 +1472,16 @@ def smoothingThreePhase(verts,facesi, facess, nbrfci, nbrfcs, msk_nbrfci, msk_nb
 
         # # find curvatures/weights
         if method == None: # isotropic (diffusion) smoothing
-            kHi, Avori, max_ai = meanGaussianPrincipalCurvatures(VV[mm-1], nVi, nbrfci, nbri, ind_nbri, msk_nbri)
+            kHi, Avori, max_ai = meanGaussianPrincipalCurvatures(VV[mm-1], nVi, nbri, ind_nbri, msk_nbri)
             kHi_, std, kHab = integralMeanCurvature(kHi, Avori, interface)
             dvi_ = (ab_*(nVi.T*(kHi - kHi_))).T   # kHi --> const (for individual AB interfaces)
             stdkHi.append(np.sum(std))
-            kHs, Avors, max_as = meanGaussianPrincipalCurvatures(VV[mm-1], nVs, nbrfcs, nbrs, ind_nbrs, msk_nbrs)
+            kHs, Avors, max_as = meanGaussianPrincipalCurvatures(VV[mm-1], nVs, nbrs, ind_nbrs, msk_nbrs)
             dvs_ = s_*(nVs.T*kHs).T               # kHs --> min
 
         elif method == 'aniso_diff':
-            kHi, Avori, max_ai = meanGaussianPrincipalCurvatures(VV[mm-1], nVi, nbrfci, nbri, ind_nbri, msk_nbri, method='aniso_diff')
-            kHs, Avors, max_as = meanGaussianPrincipalCurvatures(VV[mm-1], nVs, nbrfcs, nbrs, ind_nbrs, msk_nbrs, method='aniso_diff')
+            kHi, Avori, max_ai = meanGaussianPrincipalCurvatures(VV[mm-1], nVi, nbri, ind_nbri, msk_nbri, method='aniso_diff')
+            kHs, Avors, max_as = meanGaussianPrincipalCurvatures(VV[mm-1], nVs, nbrs, ind_nbrs, msk_nbrs, method='aniso_diff')
             dvi_ = 0.1*(nVi.T*(kHi)).T  # kHi --> min
             dvs_ = 0.1*(nVs.T*(kHs)).T  # kHs --> min
         del nVs, nVi, kHs, kHi, kHi_
