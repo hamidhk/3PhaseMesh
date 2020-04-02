@@ -1236,6 +1236,7 @@ def meanGaussianPrincipalCurvatures(verts, nV, nbr, ind_nbr, msk_nbr, **kwargs):
     # by Meyer, Desbrun, Schroderl, Barr, 2003, Springer
     # @ "Visualization and Mathematics III" book, pp 35-57,  
     method = kwargs.get('method')
+    Gauss = kwargs.get('return_Gaussian')
 
     # verts inside mesh have both alpha and beta angles
     # verts on the boundaries have only alpha angle
@@ -1269,11 +1270,10 @@ def meanGaussianPrincipalCurvatures(verts, nV, nbr, ind_nbr, msk_nbr, **kwargs):
     l2ub = ub[:,0]**2 + ub[:,1]**2 + ub[:,2]**2
     l2vb = vb[:,0]**2 + vb[:,1]**2 + vb[:,2]**2
 
-
     # 2x Triangle area on alpha and beta sides of i,j edge
     areaTa = np.sqrt(l2ua*l2va-(uava**2))
     areaTb = np.sqrt(l2ub*l2vb-(ubvb**2))
-    del va, ua, ub, vb, l2va, l2ub, l2vb
+    del va, ua, ub, vb, l2va, l2vb #, l2ub
     # smoothing can sometimes squeeze all 3 verts of a face so close
     # that the area becomes nearly zero. This may cause zero-division warning
     # & potentially errors. The two lines below is to prevent this!
@@ -1293,7 +1293,7 @@ def meanGaussianPrincipalCurvatures(verts, nV, nbr, ind_nbr, msk_nbr, **kwargs):
     # axis0 (alpha & beta); axis1 (angle by vert i); axis2 (the other angle)
     aa = np.vstack((uava, uawab, -vawab)).T
     bb = np.vstack((ubvb, ubwab, -vbwab)).T
-    del withBeta, withOutBeta, uava, vawab, ubvb, ubwab, vbwab  
+    del uava, vawab, ubvb, vbwab, # ubwab, withBeta, withOutBeta 
     
     # Ava & Avb (A_voroni) stores areas of alpha and beta sides
     Ava = np.zeros(len(nbr), dtype=verts.dtype)
@@ -1332,7 +1332,7 @@ def meanGaussianPrincipalCurvatures(verts, nV, nbr, ind_nbr, msk_nbr, **kwargs):
 
     Ava = Ava[ind_nbr]
     Ava[msk_nbr==False] = 0
-    Ava = np.sum(Ava, axis=1)
+    Ava = np.sum(Ava, axis=1) # Ava[i] is now total voroni area (Amxd) for vertex i
 
     kk = kk[ind_nbr]
     kk[msk_nbr==False] = 0
@@ -1343,63 +1343,72 @@ def meanGaussianPrincipalCurvatures(verts, nV, nbr, ind_nbr, msk_nbr, **kwargs):
     Amxd[nbr[:,0][ind_nbr[:,0]]] = Ava
     
     # Gaussian & principal curvatures, wieght func. (wf) for anisotropic diffusion smoothing
-    if method == 'aniso_diff':
+    if Gauss == True or method == 'aniso_diff':
         # kH[kH==0] = 2.2250738585072014e-308  # to prevent devision-by-zero error
         # Gaussian curvature (kG)
-        # uawab is dotprod of two edges making theta (ta) angle at vertex i
-        l2 = np.sqrt(l2ua*l2wab)
-        # l2[l2==0] = 2.2250738585072014e-308 # to prevent devision-by-zero error
-        # costa = uawab/l2 # cos(ta)
-        ta = np.arccos(uawab/l2)
+        # uawab is dotprod of two edges (ua & wab) making theta (ta) angle at vertex i
+        # costa = uawab/np.sqrt(l2ua*l2wab) # cos(ta)
+        ta = np.arccos(uawab/np.sqrt(l2ua*l2wab)) 
+        tb = np.zeros(len(nbr), dtype=verts.dtype)
+        tb[withOutBeta] = 0
+        tb[withBeta] = np.arccos(ubwab[withBeta]/np.sqrt(l2ub[withBeta]*l2wab[withBeta]))
+        ta = (ta+tb)/2
         ta = ta[ind_nbr]
         ta[msk_nbr==False] = 0
         ta = np.sum(ta, axis=1)
         kG = np.zeros(len(verts), dtype=verts.dtype)
         kG[nbr[:,0][ind_nbr[:,0]]] = (2*np.pi - ta)/Ava
 
-        # principal curvatures (k1, k2)
-        dlta = kH**2 - kG
-        dlta[dlta<0] = 0
-        dlta = np.sqrt(dlta)
-        k1 = kH + dlta
-        k2 = kH - dlta
-        del dlta, uawab, l2, l2ua, l2wab, ta, nbr, kk, Ava
+        if Gauss == True and method != 'aniso_diff':
+            return kH, kG, Amxd, maxa
+            
+        elif method == 'aniso_diff':
+            # principal curvatures (k1, k2)
+            dlta = kH**2 - kG
+            dlta[dlta<0] = 0
+            dlta = np.sqrt(dlta)
+            kHabs = np.absolute(kH)
+            k1 = kHabs + dlta
+            k2 = kHabs - dlta
+            del dlta, uawab, l2ua, l2wab, ta, nbr, kk, Ava, withBeta, withOutBeta, l2ub, ubwab
 
-        # weight function (wf) for smoothing by aniso. diff.
-        wf = np.ones(len(verts), dtype=verts.dtype)
-        TT = 0.7 # user-defined parameter, feature-noise threshold
-        kHabs = np.absolute(kH)
-        k1abs = np.absolute(k1)
-        k2abs = np.absolute(k2)
-        # corners will not move in smoothing (wf=0)
-        msk1 = np.logical_and(k1abs>TT, k2abs>TT, k1*k2>0)
-        wf[msk1] = 0
-        # msk2 below is not initialized by np.zeros to avoid devision
-        # by zero, below @ wf=k1/kH or k2/kH
-        # initialized neither by np.ones, because k1,k2,kH can be 1
-        # initialization by values larger than all curvatures
-        mx = 1.1*max(np.max(kHabs), np.max(k1abs), np.max(k2abs))
-        msk2 = mx*np.ones(len(verts), dtype=verts.dtype)
-        for i in range(len(msk2)):
-            if kHabs[i] != 0: # to avoid devision by zero @ wf=k1/kH or k2/kH
-                msk2[i] = min(k1abs[i], k2abs[i], kHabs[i])
-        # for geometric or feature edges (not mesh edges), 
-        # smoothing speed proportional to min curvature
-        crit1 = k1abs==msk2
-        crit2 = k2abs==msk2
-        wf[crit1] = k1[crit1]/kH[crit1]
-        wf[crit2] = k2[crit2]/kH[crit2]   
-        # 3 lines below commented out; as wf is initialized by np.ones 
-        #msk3 = np.logical_and(k1abs<=TT, k2abs<=TT)
-        #wf[msk3] = 1    # isotropic smoothing for noisy regions
-        #wf[kHabs==msk2] = 1 # isotropic smoothing for noisy regions
-        wf[wf<-0.1] = -0.1 # stability thresh. to avoid strong inverse diff.
-        wf = wf*kH
-        del kH, mx, verts, kHabs, k1abs, k2abs, msk2, crit1, crit2
-        # in smoothing by anis. diff. the verts are moved along
-        # their unit normal vectors by wf*kH (x_new = x_old -(wf*kH)*normal)
-        # in isotropic diffusion wf's simply mean curvature. kH (below)
-        return wf, Amxd, maxa # wf(mean curnvature), Amxd (voroni area), maxa (max triangle area)        
+            # weight function (wf) for smoothing by aniso. diff.
+            wf = np.ones(len(verts), dtype=verts.dtype)
+            TT = 0.7 # user-defined parameter, feature-noise threshold
+            k1abs = np.absolute(k1)
+            k2abs = np.absolute(k2)
+            # corners will not move in smoothing (wf=0)
+            msk1 = np.logical_and(k1abs>TT, k2abs>TT, k1*k2>0)
+            wf[msk1] = 0
+            # msk2 below is not initialized by np.zeros to avoid devision
+            # by zero, below @ wf=k1/kH or k2/kH
+            # initialized neither by np.ones, because k1,k2,kH can be 1
+            # initialization by values larger than all curvatures
+            mx = 1.1*max(np.max(kHabs), np.max(k1abs), np.max(k2abs))
+            msk2 = mx*np.ones(len(verts), dtype=verts.dtype)
+            for i in range(len(msk2)):
+                if kHabs[i] != 0: # to avoid devision by zero @ wf=k1/kH or k2/kH
+                    msk2[i] = min(k1abs[i], k2abs[i], kHabs[i])
+            # for geometric or feature edges (not mesh edges), 
+            # smoothing speed proportional to min curvature
+            crit1 = k1abs==msk2
+            crit2 = k2abs==msk2
+            wf[crit1] = k1[crit1]/kH[crit1]
+            wf[crit2] = k2[crit2]/kH[crit2]   
+            # 3 lines below commented out; as wf is initialized by np.ones 
+            #msk3 = np.logical_and(k1abs<=TT, k2abs<=TT)
+            #wf[msk3] = 1    # isotropic smoothing for noisy regions
+            #wf[kHabs==msk2] = 1 # isotropic smoothing for noisy regions
+            wf[wf<-0.1] = -0.1 # stability thresh. to avoid strong inverse diff.
+            wf = wf*kH
+            del kH, mx, verts, kHabs, k1abs, k2abs, msk2, crit1, crit2
+            # in smoothing by anis. diff. the verts are moved along
+            # their unit normal vectors by wf*kH (x_new = x_old -(wf*kH)*normal)
+            # in isotropic diffusion wf's simply mean curvature. kH (below)
+            if Gauss != True:
+                return wf, Amxd, maxa # wf(smoothing wieghts), Amxd (voroni area), maxa (max triangle area)        
+            elif Gauss == True:
+                return wf, kG, Amxd, maxa # wf(smoothing weights), kG (Gaussian curvature), Amxd (voroni area), maxa (max triangle area)        
     else:
         # return H, kH, kG, k1, k2      # returns all curvatures
         del nbr, verts, uawab, l2ua, l2wab, kk, Ava
