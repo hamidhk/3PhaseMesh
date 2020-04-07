@@ -873,9 +873,10 @@ def ThreePhaseIntersection(img, **kwargs):
                         # lssp_.extend([l0[0,0]+lces+lcei] + l0[:,4][msk==1].tolist() )  # GRØNN
                         # lssp__.extend([l0[0,0]+lces+lcei] + l0[:,4][msk==2].tolist() )  # BLÅ                
     # update unq, labc_unq & cnt
-    unq = np.concatenate((unq, np.array(unq_)))
-    labc_unq = np.concatenate((labc_unq, np.array(labc_unq_)))
-    cnt = np.concatenate((cnt, np.array(cnt_)))
+    if len(unq_)>0:
+        unq = np.concatenate((unq, np.array(unq_)))
+        labc_unq = np.concatenate((labc_unq, np.array(labc_unq_)))
+        cnt = np.concatenate((cnt, np.array(cnt_)))
     del unq_, labc_unq_, cnt_
     print(f'\nCorrect mesh orientation/labels issues in {round(time()-t,4)} sec!', flush=True)
     
@@ -1053,9 +1054,10 @@ def ThreePhaseIntersection(img, **kwargs):
         nbrfcs = np.concatenate((x_[0:lces], nbrfcs))
         nbrfci = np.concatenate((x_[lces::], nbrfci))
 
-        ind = np.array(ind)
-        labc[ind[:,1]] = labc[ind[:,0]] # overriding labels by (phaseA, phaseB) - fluid-fluid - labels extracted from associated ce vert of a co vert in 3pahse line
-        labc[ind[:,1],2] = -4       # mark verts @ 3phase intersection with -4 in column 2 of label array      
+        if len(ind)>0:
+            ind = np.array(ind)
+            labc[ind[:,1]] = labc[ind[:,0]] # overriding labels by (phaseA, phaseB) - fluid-fluid - labels extracted from associated ce vert of a co vert in 3pahse line
+            labc[ind[:,1],2] = -4       # mark verts @ 3phase intersection with -4 in column 2 of label array      
         del cef, x_, arr, ind
 
         # corresponding mask arrays for nbrfci & nbrfcs
