@@ -1301,29 +1301,28 @@ def meanGaussianPrincipalCurvatures(verts, nV, nbr, ind_nbr, msk_nbr, **kwargs):
     Ava = np.zeros(len(nbr), dtype=verts.dtype)
     Avb = np.zeros(len(nbr), dtype=verts.dtype)
     # True if all three are positive (all angles>=90)
-    msk = np.logical_and(aa[:,0]>=0, aa[:,1]>=0, aa[:,2]>=0)
+    msk = np.logical_and(aa[:,0]>0, aa[:,1]>0, aa[:,2]>0)
     # voroni area where triangle in alpha-side is not obtuse
     Ava[msk] = cota[msk]*l2wab[msk]/8
     # True if all three are positive (all angles>=90)
-    msk = np.logical_and(bb[:,0]>=0, bb[:,1]>=0, bb[:,2]>=0)
+    msk = np.logical_and(bb[:,0]>0, bb[:,1]>0, bb[:,2]>0)
     # voroni area where triangle in beta-side is not obtuse
     Avb[msk] = cotb[msk]*l2wab[msk]/8
     # voroni area at alpha-side when triangle is obtuse at i-angle
-    msk = aa[:,1]<0
+    msk = aa[:,1]<=0
     Ava[msk] = areaTa[msk]/4
 
     # voroni area at alpha-side when triangle is obtuse but not in i-angle
-    msk = np.logical_or(aa[:,0]<0, aa[:,2]<0)
+    msk = np.logical_or(aa[:,0]<=0, aa[:,2]<=0)
     Ava[msk] = areaTa[msk]/8
-    
     # voroni area at beta-side when triangle is obtuse at i-angle
-    msk = bb[:,1]<0
+    msk = bb[:,1]<=0
     Avb[msk] = areaTb[msk]/4
         
     # voroni area at beta-side when triangle is obtuse but not in i-angle
-    msk = np.logical_or(bb[:,0]<0, bb[:,2]<0)
+    msk = np.logical_or(bb[:,0]<=0, bb[:,2]<=0)
     Avb[msk] = areaTb[msk]/8
-    Ava = Ava + Avb
+    Ava = (Ava + Avb)
     del areaTa, areaTb, aa, bb, msk, Avb
 
     # calc. Area mixed (Amxd) and mean curvature (kH) per vertex
