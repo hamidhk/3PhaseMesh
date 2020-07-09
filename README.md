@@ -9,9 +9,11 @@ by Meyer, Desbrun, Schroderl, Barr, 2003, Springer
 
 In case of fluid flow in porous media, after smoothing fluid-fluid and solid-fluid meshes, the mean curvatures at each interface is calculated. This can be used to find the local capillary pressure in 2-phase flow in porous material. The contact angles between fluid-fluid and solid-fluid meshes on the 3-phase contact line can also be calculated.
 
-Further, the code can be used in general for smoothing any triangular meshes, finding intersection of two-three arbitrary meshes, correcting non-orientable points in 2D and 3D intersections, creating neighborhood maps and data structure required for curvature calculation, detection of mesh boundaries etc.
+Further, the code can be used in general for smoothing any triangular meshes, finding intersection of two-three arbitrary meshes, correcting non-orientable vertices in 2D and 3D intersections, creating neighborhood maps and data structure required for curvature calculation, detection of mesh boundaries etc.
 
 Computing curvatures and mesh smoothing is inherently a heavy iterative computation. I suggest you slice a smaller volume of your image in main() after reading the image for testing, before you run the code on whole image. Make sure the sliced volume contains all 3 phases. A 100x100x100 sample image was uploaded in the 'sample_input' folder; and 'sample_output' is the output for the same image. Four screenshots of original and smoothed meshes were also uploaded in the main project folder.
+
+This is program is used to find contact angles and curvatures of X-ray tomography images of water–oil saturated porous solid samples. The outcome is summarized in a peer-reviewed article. I will uploaed the artciele or provide a download link here, as soon as the review process is over. 
 
 ## Descriptions
 
@@ -19,21 +21,21 @@ Computing curvatures and mesh smoothing is inherently a heavy iterative computat
 The .raw/.mhd images used as example image can be loaded as numpy arrays either using simpleITK library, or simply by simpleitk plugin of skimage library after simpleitk library is installed. If your image is in a  different format, change the code accordingly in the main() function.
 The image should be converted to a 3D numpy array with the same shape (dimensions) as the input image.
 
-The input image has to contain 3 phases, and it has to be a segmented image. Global variables 'Aval', 'Bval' and 'Sval' early in the code are the values of phase A (wetting fluid), phase B (nonwetting fluid) and solid. Adjust them according to the values in your image. In the images used in this work, pixel value of 0 is nonwetting fluid (Dodecane), 1 is wetting fluid (brine) and 2 is solid (sintered glass spheres) plus the boundary.
+The input image has to contain 3 phases, and it has to be a segmented image. Global variables 'Aval', 'Bval' and 'Sval' early in the code are the values of phase A (wetting fluid), phase B (nonwetting fluid) and solid. Adjust them according to the values in your segmented image. In the images used in this work, pixel value of 0 is nonwetting fluid (Dodecane), 1 is wetting fluid (brine) and 2 is solid (sintered glass spheres) plus the boundary.
 
 The other global variable 'path' is simply the address of folder where the image is stored on the disk. The program will save the outputs in the same folder with image name as prefix.
 
 ### 2)
-Smoothing of fluid-fluid interfaces should be done locally (minimization of free energy). This requires identification of individual interfaces. Therefore, the wetting and nonwetting droplets are labeled separately using ndimage.measurements.label(img_phaseA) and ndimage.measurements.label(img_phaseB) from scipy library. This is done in the beginning of function,
+Smoothing of fluid-fluid interfaces should be done locally. This requires identification of individual interfaces. Therefore, the wetting and nonwetting droplets are labeled separately using ndimage.measurements.label(img_phaseA) and ndimage.measurements.label(img_phaseB) from scipy library. This is done in the beginning of function,
 
 ```
 ThreePhaseIntersection(img, **kwargs)
 ```
 Intersection function receives the segmented 3-phase image 'img' and the values of each phase are already given as global variables Aval, Bval, Sval.
 
-intersectAlongAllAxes(args), a nested function in the intersection function extracts the intersections between the phases and all the necessary information for creation of the meshes and corrections of non-orientable points performed later.
+intersectAlongAllAxes(args), a nested function in the intersection function extracts the intersections between the phases and all the necessary information for creation of the meshes and corrections of non-orientable vertices performed later.
 
-ThreePhaseIntersection is a thorough function. In addition to finding intersections, it performs labeling corrections, mesh orientation corrections, finding unique indexes for vertices (points), labeling the points to identify which interface they belong to, and construction of 15 arrays/structures in vector form required for finding normal vectors, curvatures and mesh smoothing etc.
+ThreePhaseIntersection is a thorough function. In addition to finding intersections, it performs labeling corrections, mesh orientation corrections, finding unique indexes for vertices (points), labeling the vertices to identify which interface they belong to, and construction of 15 arrays/structures in vector form required for finding normal vectors, curvatures and mesh smoothing etc.
 
 Function runtime was roughly 673 seconds for an image with dimensions of (576, 751, 751), with about 28.5 million vertices, 3.7 million triangles at AB (fluid-fluid), and 53.4 million triangles at S-AB (solid-fluid) meshes. The runtime for the same image where only meshes were extracted/corrected and the smoothing structures were ignored was 355 seconds.
 
@@ -41,6 +43,14 @@ If kwarg return_smoothing_structures=True is passed as an argument to the functi
 ```
 ThreePhaseIntersection(img, return_smoothing_structures=True)
 ```
+
+Further, the Intersection function provides thorough information on the individual fluid clusters which are not in contact with image boundaries. Information include topology (Euler characteristic), vertices on the cluster, triangle faces of solid-fluid belonging to cluster, triangle faces of fluid-fluid belonging to cluster. 3-phase contact lines of the cluster are also provided as a time series in which consecutive vertices are sorted. This can be used later after smoothing to study the local variations of contact angles. The function
+```
+def clusterBasedContactCalculations(verts, verts_, facesi, nVi, ang, kGi, kGs, Avori, Avors, labc, cluster, path_, filename):
+```
+performs cluster-based calculations after smoothing. verts and verts_ are original and smoothed vertices, respectively.
+
+
 Below, description of important structures follow.
 
 1) verts: float64 numpy array with the 3D (z,y,x) coordinates of the vertices!
@@ -63,7 +73,7 @@ unitVector(vec)					 					# normalization of vectors (length = 1)
 The function
 
 ```
-smoothingThreePhase(verts,facesi, facess, nbrfci, nbrfcs, msk_nbrfci, msk_nbrfcs, nbri, nbrs, ind_nbri, ind_nbrs, msk_nbri, msk_nbrs, interface, **kwargs)
+def smoothingThreePhase(verts,facesi, facess, nbrfci, nbrfcs, msk_nbrfci, msk_nbrfcs, nbri, nbrs, ind_nbri, ind_nbrs, msk_nbri, msk_nbrs, interface, **kwargs)
 
 ```
 
@@ -71,28 +81,18 @@ receives verts, facesi, facess etc. It changes the positions of verts along thei
 
 The amount of change is determined by the weight function (mean curvature) in isotropic smoothing, and slightly complicated in the anisotropic smoothing. The default smoothing is isotropic which is also the goal of this project.
 
+Vertices in solid-fluid and fluid-fluid meshes are updated simultaneously at each iteration. In this way, the three-phase contact line becomes automatically smooth as well.
+
+t_f and t_s are tuning parameters. They are initially set to t_s=0.15 and t_f=0.3. The reason to use fractions is to avoid too large changes which can cause divergence. This is necessary in complex structures like porous media images.
+
+The variables tau_s and tau_f are defined as goals of smoothing.
 ```
-kHi, Avori, max_ai = meanGaussianPrincipalCurvatures(VV[mm-1], nVi, nbrfci, nbri, ind_nbri, msk_nbri) # for fluid-fluid mesh
-kHi_, std, kHab = integralMeanCurvature(kHi, Avori, interface) 										  # for fluid-fluid mesh
-dvi_ = (ab_*(nVi.T*(kHi - kHi_))).T   # kHi --> const (for individual AB interfaces)				  # for fluid-fluid mesh
-kHs, Avors, max_as = meanGaussianPrincipalCurvatures(VV[mm-1], nVs, nbrfcs, nbrs, ind_nbrs, msk_nbrs) # for solid-fluid mesh
-
-dvi_ = (ab_*(nVi.T*(kHi - kHi_))).T  # kHi approaches a constant value (for individual AB interfaces in fluid-fluid mesh)
-dvs_ = s_*(nVs.T*kHs).T 			 # kHs approaches a minimum value in solid-fluid mesh
-# new_vert = vert - (ab_*(nVi.T*(kHi - kHi_))).T - s_*(nVs.T*kHs).T  
+tau_s = 1 - mean_of_dot_product_of_all_neighbor_vertices_on_solid_fluid_mesh
+tau_f = mean_of_standard_deviation_of_mean_curvatures_on_fluid_fluid_mesh
 ```
+Both tau_s and tau_f have to be minimized to smooth the meshes. t and tau variables are used to run and stop the iteration. For instance, when tau_s improves in an iteration, t_s will be multiplied by 1.05,  and if it gets worse t_s will reduce to 0.8 of its previous value. t_f is updated in the same manner. When one of t variables go below 1e-3, which happens in the later steps of smoothing when there is nearly no changes, both t_s and t_f are set to minimum of these two and a final count_down for iterations starts. The loop kills the iteration after 5 more steps. The step which provided the least standard deviation for mean curvatures of the fluid-fluid interfaces is picked as the result of iteration. 
 
-nVi and nVs are the unit normal vectors at fluid-fluid and solid meshes. They have the same size (array length) as verts. nVi is (0,0,0) where a vertex is only on solid mesh, and similarly nVs is (0,0,0) when a vertex is only in the fluid-fluid mesh.
-
-kHi and kHs, the mean curvature at fluid-fluid and solid-fluid meshes, respectively, are the weight of change in smoothing iterations. kHi_ is the integral of mean curvature at individual interfaces calculated by function
-```
-integralMeanCurvature(kHi, Avori, interface)
-```
-at every iteration. kHi, Avori (voronoi area around each vertex) are outputs of meanGaussianPrincipalCurvatures(args) function and 'interface' is provided by ThreePhaseIntersection(arg) function, as mentioned in section 2.
-
-As it is clear, vertices in solid-fluid and fluid-fluid meshes are updated simultaneously at each iteration. In this way, the three-phase contact line becomes automatically smooth as well.
-
-ab_ and s_ are tuning parameters. They are initially set to s_=0.15 and ab_=0.3. The reason to use fractions is to avoid too large changes which can cause divergence. This is necessary in complex structures like porous media images. These two parameters are updated in every iteration, with a reward/penalty strategy. If solid-fluid mesh improves s_ will be multiplied by 1.05,  and if it gets worse s_ will reduce to 0.8 of its previous value. ab_ is updated in the same manner. When one of these go below 1e-3, which happens in the later steps of smoothing when there is nearly no changes, both s_ and ab_ are set to minimum of these two and a final count_down for iterations starts. The loop kills the iteration after 5 more steps. The step which provided the least standard deviation for mean curvatures of the fluid-fluid interfaces is picked as the result of iteration. The solid-fluid mesh smoothes very quickly, however the fluid-fluid mesh takes longer time as mean curvatures are approaching to an unknown value. Termination of iterations is also controlled by number of iterations. At iteration steps after step 100, the loop stops if standard deviation of fluid-fluid mean curvature is not minimum at last step compared to previous steps. However, in code testing examples, the first mechanism has almost always converged and stopped the iteration before step 100. In the test cases with constant s_ and ab_, the convergence required more iteration steps and the standard deviation of the integral of mean curvature in fluid-fluid interfaces was higher.
+Termination of iterations is also controlled by number of iterations. At iteration steps after step 100, the loop stops if standard deviation of fluid-fluid mean curvature is not minimum at last step compared to previous steps. However, in code testing examples, the first mechanism often stopped the iteration before step 100.
 
 Smoothing function updates the vertices at every iteration with two constraints. First constraint ensures that the vertices do not displace more than 0.2 pixel length at each step. If displacement is more than this, it will be reduced to 0.2. Second constraint ensures that the vertices never go farther than 1.7 pixel length from their original positions. 1.7 is roughly the longest diameter of 1x1x1 voxel. Freedom of displacement of 1.7 is associated with the uncertainty in the experimental images. The meshes smooth often long before the vertices have displaced by 1.7 pixel. The user can introduce a different constraint by using verts_constraint kwarg as an input for the smoothing function. Tests show that the resulted smooth meshes do not vary much with values roughly in the range of 1-1.7. Only minor number of vertices may need a large displacement.
 ```
@@ -108,11 +108,11 @@ new_verts = moothingThreePhase(args, method='aniso_diff')
 Smoothing of a full image with specifications mentioned in section 2, stopped after 69 iteration steps. Each iteration took roughly 173 seconds.
 
 ### 5)
-After smoothing is performed, based on the smoothed vertices, main() function computes normal vectors on solid-fluid (nVs) and on fluid-fluid (nVi) meshes, in addition to the mean curvatures on fluid-fluid (kHi), integral of mean curvature for individual fluid-fluid interfaces (kHi_), interfacial areas (Ai), and finally contact angles (ang) on the three phase common line. Note that all the arrays nVs, nVi, ang, kHi and ang have the same length as verts (vertices). This ensures that the indexes in these arrays are the same as indexes for verts. For instance, nVi is (0,0,0) wherever the index is for a vertex on the solid-solid mesh away from the 3-phase common line. All these arrays can be simply masked/sliced by the label array (labc). For instance, binary mask 
+After smoothing is performed, based on the smoothed vertices, main() function computes normal vectors on solid-fluid (nVs) and on fluid-fluid (nVi) meshes, in addition to the mean curvatures on fluid-fluid (kHi), average mean curvature for individual fluid-fluid interfaces (khm), interfacial areas (Ai), and finally contact angles (ang) on the three phase common line. Note that all the arrays nVs, nVi, ang, kHi and ang have the same length as verts (vertices). This ensures that the indexes in these arrays are the same as indexes for verts. For instance, nVi is (0,0,0) wherever the index is for a vertex on the solid-solid mesh away from the 3-phase common line. All these arrays can be simply masked/sliced by the label array (labc). For instance, binary mask 
 ```
 labc[:,2]==-4 
 ```
-returns all the indexes on the contact line; or binary mask
+returns all the indexes on the contact lines; or binary mask
 ```
 numpy.logical_or(labc[:,2]==-1, labc[:,2]==-4)
 ```
@@ -120,16 +120,26 @@ returns all the indexes on the fluid-fluid interfaces; and the mask
 ```
 numpy.logical_or(labc[:,2]==-2, labc[:,2]==-3)
 ```
-returns all the indexes on the solid mesh away from the 3-phase common line.
+returns all the indexes on the solid mesh excluding the ones on the 3-phase common lines.
 
 All arrays of verts (initial vertices), labc, facesi, facess, verts_ (smooth), nVi (smooth), nVs (smooth), ang (smooth), kHi (smooth) are saved by numpy.save function with a prefix containing the image name, and _init_ or _final_. Arrays can later be loaded using numpy.load for further analysis.
 
-The list 'interface' introduced in section 2, is modified here to add info on integral of mean curvature, area and mean contact angle for individual interfaces. Any interface with less than 25 vertices is removed from the list (smaller interfaces are too uncertain in computations). The list elements will be 
+Contact angles are also separately saved as a 'csv' file.
+
+The list 'interface' introduced in section 2, is modified here to add info on integral of mean curvature, area and mean contact angle for individual interfaces. Any interface with less than 100 vertices is removed from the list (smaller interfaces are too uncertain in computations). The list elements will be 
 ```
 [ 'labelPhaseA, labelPhaseB, meanCurv(1/pixel), Area(pixel**2), meanAngle(deg), indicesOfABVertices, indicesOfABFaces' ]
 ```
 with the first element as the header. The list is saved by pickle.dump function, and can be read with pickle.load.
 An array similar to 'interface' list is saved together with _final_ arrays. Elements in the array are the same as those in the 'interface' list, except the last two columns which give the number of vertices and faces instead of the indexes.
+
+Based on the list 'cluster' the cluster-based calculations are performed by 
+```
+def clusterBasedContactCalculations(verts, verts_, facesi, nVi, ang, kGi, kGs, Avori, Avors, labc, cluster, path_, filename)
+```
+as mentioned earlier. Similar to 'interface', the results of cluster-based calculations are saved as both list and array.
+
+The main function also prints the results of interface-based and cluster-based calculations.
 
 There are a number of code blocks in main() function with description on top of the block. These block create/save mesh with .stl format; visualize the smooth/original meshes, 3-phase contact points, normal vectors, etc; visualize mean curvature sign; and visualize individual fluid-fluid interfaces with different colors. Visualizations are performed using malb function of mayavi library. Histogram for contact angle frequency is also created/saved.
 
